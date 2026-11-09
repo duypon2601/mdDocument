@@ -2,7 +2,7 @@
 
 Hệ thống nhận file tài liệu (PDF, DOCX, PPTX, XLSX, HTML, ảnh scan…), chuyển sang Markdown, chia chunk, tạo embedding rồi lưu vào Vector DB để các ứng dụng RAG và tìm kiếm dùng lại. Temporal điều phối toàn bộ các bước. Khái niệm và luật viết workflow xem ở [biKipTemporal.md](biKipTemporal.md).
 
-> Dự án chưa có mã nguồn, nên công nghệ ghi trong sơ đồ chỉ là đề xuất (Python 3, FastAPI, Temporal, PostgreSQL, MinIO/S3, Qdrant, Docling/MarkItDown). Các con số timeout, retry, kích thước chunk là giá trị khởi điểm, cần chỉnh lại sau khi đo trên tài liệu thật.
+> Mã nguồn nằm trong `packages/`, mỗi container Level 2 là một package (xem [Từ container tới package](#từ-container-tới-package)). Sơ đồ Level 3 ghi kèm tên module Python của từng component. Các con số timeout, retry, kích thước chunk là giá trị khởi điểm, cần chỉnh lại sau khi đo trên tài liệu thật.
 >
 > Tất cả sơ đồ sinh ra từ [`architecture/workspace.dsl`](architecture/workspace.dsl) (Structurizr DSL). Sửa file đó rồi chạy `./docs/architecture/render.sh` (cần Docker) để ra lại ảnh SVG/PNG trong `architecture/diagrams/`. Đừng sửa ảnh bằng tay. Trong Claude Code, skill `c4-architecture` (lệnh `/c4`) làm sẵn các bước này.
 
@@ -36,7 +36,7 @@ Temporal là thành phần bên trong hệ thống (tự host), nên không xu�
 
 | Container | Công nghệ đề xuất | Trách nhiệm |
 |---|---|---|
-| Web UI / CLI | React hoặc Typer | Upload, xem tiến độ, duyệt tài liệu, bấm re-index |
+| Web UI / CLI | Trang HTML tĩnh do API phục vụ, Typer CLI | Upload, xem tiến độ, duyệt tài liệu, bấm re-index |
 | Ingestion API | FastAPI + `temporalio` client | Cổng vào duy nhất: validate, lưu file gốc, tạo document, start workflow, query tiến độ, gửi signal và cancel |
 | Temporal Server | Temporal 1.32.2 self-hosted (PostgreSQL riêng) | Lưu lịch sử workflow, giữ task queue, timer, retry. Temporal Web UI cho quản trị viên xem từng bước, retry, terminate |
 | Conversion Worker | Docling, MarkItDown, PyMuPDF, task queue `convert-tq` | Activity chuyển file sang Markdown. Scale theo CPU/GPU vì OCR nặng |
@@ -46,6 +46,27 @@ Temporal là thành phần bên trong hệ thống (tự host), nên không xu�
 | Vector DB | Qdrant | Vector và payload phục vụ truy vấn |
 
 Không có container riêng cho việc điều phối. Code workflow gần như không tốn tài nguyên, nên chạy chung tiến trình với Indexing Worker ([de-xuat-bo-orchestrator.md](de-xuat-bo-orchestrator.md)). Vẫn giữ ba task queue. Conversion Worker cần nhiều CPU/GPU nên scale riêng. Indexing Worker bị giới hạn bởi embedding API, nên rate limit (`max_task_queue_activities_per_second`) đặt trên `Worker` của `index-tq` và không làm chậm workflow task hay `update_status` bên `ingest-tq`. Indexing Worker chết thì cả luồng tạm dừng, nhưng lịch sử nằm trên Temporal Server nên worker lên lại thì chạy tiếp từ bước dở.
+
+### Từ container tới package
+
+Code là một uv workspace. Code của mỗi container là một package, có `pyproject.toml`, dependency và image Docker riêng (target `api`, `convert`, `index` trong `Dockerfile`).
+
+| Package | Thư mục | Container | Module chính |
+|---|---|---|---|
+| `ingest-api` | `packages/api` | Ingestion API | `ingest.api.app`, `validator`, `dedup`, `workflow_client`, `main` |
+| `ingest-convert` | `packages/convert` | Conversion Worker | `ingest.convert.activities`, `parsers/*`, `ocr`, `vision`, `worker` |
+| `ingest-index` | `packages/index` | Indexing Worker | `ingest.index.workflows/*`, `activities`, `status`, `chunking`, `embedder`, `vectorstore`, `worker` |
+| `ingest-cli` | `packages/cli` | Phần CLI của Web UI / CLI | `ingest.cli` |
+| `ingest-core` | `packages/core` | Không có. Đây là thư viện chung của ba package trên | `ingest.core.config`, `models`, `keys`, `errors`, `retry`, `storage`, `db`, `markdown`, `runtime` |
+
+Quy tắc phụ thuộc:
+
+- `ingest-api`, `ingest-convert`, `ingest-index` chỉ import `ingest-core` và không import lẫn nhau. Workflow trong `ingest-index` gọi activity của `ingest-convert` theo tên qua task queue `convert-tq`, nên không cần import code convert.
+- `ingest-core` giữ những thứ mà hai bên của một ranh giới phải hiểu giống nhau: payload Temporal (`models`), quy tắc đặt key trên storage (`keys`), mã lỗi và retry policy, schema Metadata DB, định dạng Markdown trung gian (marker trang, `Piece`).
+- `ingest-cli` chỉ gọi API qua HTTP. Hai lệnh `ingest api` và `ingest worker …` import package tương ứng khi chạy, nên chỉ dùng được ở nơi đã cài package đó.
+- `tests/test_package_boundaries.py` kiểm tra các quy tắc trên.
+
+Trong sơ đồ Level 3, component màu vàng nhạt là code của `ingest-core` mà container đó dùng.
 
 ## Luồng xử lý một tài liệu
 
@@ -151,7 +172,7 @@ Cả workflow đặt `execution_timeout` 6 giờ khi start. Nếu bật bước 
 
 <sub>Ảnh PNG: [`L3-IngestionAPI.png`](architecture/diagrams/L3-IngestionAPI.png) · Nguồn PlantUML: [`L3-IngestionAPI.puml`](architecture/diagrams/L3-IngestionAPI.puml)</sub>
 
-API không còn tự đẩy job vào queue. Workflow Client gọi `start_workflow` cho upload mới, `query("get_progress")` khi UI hỏi tiến độ chi tiết, `signal("review_decision")` khi người dùng duyệt, `cancel()` khi huỷ. Danh sách tài liệu vẫn đọc từ Metadata DB, vì Temporal không phải chỗ để lọc và phân trang dữ liệu nghiệp vụ.
+Code nằm ở `packages/api`. Storage Client và Document Repository là `ingest.core.storage` và `ingest.core.db`. API không còn tự đẩy job vào queue. Workflow Client gọi `start_workflow` cho upload mới, `query("get_progress")` khi UI hỏi tiến độ chi tiết, `signal("review_decision")` khi người dùng duyệt, `cancel()` khi huỷ. Danh sách tài liệu vẫn đọc từ Metadata DB, vì Temporal không phải chỗ để lọc và phân trang dữ liệu nghiệp vụ.
 
 ### 3.2 Conversion Worker (file → Markdown)
 
@@ -159,7 +180,7 @@ API không còn tự đẩy job vào queue. Workflow Client gọi `start_workflo
 
 <sub>Ảnh PNG: [`L3-ConversionWorker.png`](architecture/diagrams/L3-ConversionWorker.png) · Nguồn PlantUML: [`L3-ConversionWorker.puml`](architecture/diagrams/L3-ConversionWorker.puml)</sub>
 
-Bản trước có 10 component nối thành chuỗi. Bản này gom lại thành 4 activity, cắt theo chỗ cần retry riêng: OCR chậm và hay lỗi nên tách thành activity riêng, chạy theo lô và có heartbeat. Các parser (màu nhạt) là module Python bình thường bên trong `parse_document`, không phải activity. Chúng chạy nhanh và lỗi thì retry cả bước parse cũng không tốn bao nhiêu.
+Code nằm ở `packages/convert`. Bản trước có 10 component nối thành chuỗi. Bản này gom lại thành 4 activity, cắt theo chỗ cần retry riêng: OCR chậm và hay lỗi nên tách thành activity riêng, chạy theo lô và có heartbeat. Các parser (màu nhạt) là module Python bình thường bên trong `parse_document`, không phải activity. Chúng chạy nhanh và lỗi thì retry cả bước parse cũng không tốn bao nhiêu.
 
 ### 3.3 Indexing Worker (workflow, Markdown → Vector DB)
 
@@ -167,7 +188,7 @@ Bản trước có 10 component nối thành chuỗi. Bản này gom lại thàn
 
 <sub>Ảnh PNG: [`L3-IndexingWorker.png`](architecture/diagrams/L3-IndexingWorker.png) · Nguồn PlantUML: [`L3-IndexingWorker.puml`](architecture/diagrams/L3-IndexingWorker.puml)</sub>
 
-Hai workflow chạy ở `Worker` của `ingest-tq` trong tiến trình này, cùng activity `update_status`. Code workflow phải deterministic. Muốn đổi thứ tự hay thêm bước khi còn job chạy dở thì dùng `workflow.patched`. Sau này muốn tách workflow sang tiến trình khác thì chỉ đổi chỗ đăng ký `Worker`, không sửa code workflow.
+Code nằm ở `packages/index`. Hai workflow chạy ở `Worker` của `ingest-tq` trong tiến trình này, cùng activity `update_status`. Code workflow phải deterministic. Muốn đổi thứ tự hay thêm bước khi còn job chạy dở thì dùng `workflow.patched`. Sau này muốn tách workflow sang tiến trình khác thì chỉ đổi chỗ đăng ký `Worker`, không sửa code workflow.
 
 Embed và upsert nằm chung một activity để vector không phải đi qua Temporal. Mỗi lô vài trăm chunk tạo ra vector nặng hàng MB, vượt xa giới hạn payload nên giữ dưới vài trăm KB. Activity chỉ nhận `(doc_id, index_version, batch_index)` và tự đọc lô chunk từ storage.
 

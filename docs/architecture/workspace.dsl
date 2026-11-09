@@ -16,40 +16,40 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
         // ---------- Hệ thống đang thiết kế ----------
         dis = softwareSystem "Document Ingestion System" "Nhận tài liệu, chuyển sang Markdown, chia chunk, tạo embedding và lưu vào Vector DB" {
 
-            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, bấm re-index" "React hoặc Typer CLI" "WebBrowser"
+            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, bấm re-index" "Trang HTML tĩnh do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)" "WebBrowser"
 
-            api = container "Ingestion API" "Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái" "Python, FastAPI, temporalio client" {
-                uploadCtl = component "Upload Controller" "POST /documents (multipart), POST /documents/batch" "FastAPI router"
-                statusCtl = component "Status Controller" "GET /documents/{id}, POST /documents/{id}/review, /reindex, /cancel" "FastAPI router"
-                validator = component "File Validator" "Kiểm tra MIME thật, dung lượng, định dạng hỗ trợ" "python-magic"
-                dedup = component "Dedup Service" "Tính SHA-256, doc_id sinh từ hash nên file trùng không tạo job mới" "hashlib"
-                storageCli = component "Storage Client" "Ghi file gốc vào raw/{doc_id}/" "boto3 / minio"
-                docRepo = component "Document Repository" "CRUD document, trạng thái nghiệp vụ, danh sách tài liệu" "SQLAlchemy"
-                wfClient = component "Workflow Client" "start_workflow(id=ingest-{doc_id}), query get_progress, signal review_decision, cancel" "temporalio.client"
+            api = container "Ingestion API" "Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái" "Package ingest-api (packages/api). Python, FastAPI, temporalio client" {
+                uploadCtl = component "Upload Controller" "POST /documents (multipart), POST /documents/batch" "FastAPI, ingest.api.app"
+                statusCtl = component "Status Controller" "GET /documents, GET /documents/{id}, GET /documents/{id}/markdown, POST /documents/{id}/review, /reindex, /cancel" "FastAPI, ingest.api.app"
+                validator = component "File Validator" "Kiểm tra MIME thật, dung lượng, định dạng hỗ trợ" "python-magic, ingest.api.validator"
+                dedup = component "Dedup Service" "Tính SHA-256, doc_id sinh từ hash (thêm tiền tố legacy-/v1- theo chế độ) nên file trùng không tạo job mới" "hashlib, ingest.api.dedup"
+                storageCli = component "Storage Client" "Ghi file gốc vào raw/{doc_id}/, đọc md/{doc_id}.md" "boto3, ingest.core.storage" "Core"
+                docRepo = component "Document Repository" "CRUD document, trạng thái nghiệp vụ, danh sách tài liệu" "SQLAlchemy, ingest.core.db" "Core"
+                wfClient = component "Workflow Client" "start_workflow(id=ingest-{doc_id}), query get_progress, signal review_decision, cancel" "temporalio.client, ingest.api.workflow_client"
             }
 
             temporal = container "Temporal Server" "Lưu lịch sử từng bước của workflow, quản lý task queue, timer, retry; kèm Temporal Web UI" "Temporal (self-hosted, PostgreSQL riêng) hoặc Temporal Cloud" "Temporal"
 
-            converter = container "Conversion Worker" "Chạy activity chuyển file gốc sang Markdown. Scale theo CPU/GPU" "Python, temporalio worker, task queue convert-tq" {
-                convWorker = component "Worker (convert-tq)" "Đăng ký activity convert, giới hạn số activity chạy song song theo CPU/GPU" "temporalio.worker"
-                detectAct = component "detect_format" "Loại file, PDF có lớp text hay không, danh sách trang cần OCR. Trả FormatInfo nhỏ" "@activity.defn, python-magic, PyMuPDF"
-                parseAct = component "parse_document" "Parse phần có text, ghi md-raw/{doc_id}/text.md" "@activity.defn"
-                pdfParser = component "PDF Parser" "Giữ heading, bảng, thứ tự đọc, số trang" "Docling / PyMuPDF" "Module"
-                officeParser = component "Office Parser" "DOCX, PPTX, XLSX → Markdown" "MarkItDown / python-docx / python-pptx / openpyxl" "Module"
-                htmlParser = component "HTML / Text Parser" "HTML, TXT, CSV → Markdown" "markdownify / BeautifulSoup" "Module"
-                ocrAct = component "ocr_pages" "OCR một lô trang (fan-out theo lô), ghi md-raw/{doc_id}/ocr/{batch}.md, heartbeat từng trang, trả điểm tin cậy" "@activity.defn"
-                finalizeAct = component "finalize_markdown" "Ghép text và OCR theo thứ tự trang, chuẩn hóa heading/bảng, bỏ header/footer lặp, thêm front-matter, ghi md/{doc_id}.md" "@activity.defn, python-frontmatter"
+            converter = container "Conversion Worker" "Chạy activity chuyển file gốc sang Markdown. Scale theo CPU/GPU" "Package ingest-convert (packages/convert). Python, temporalio worker, task queue convert-tq" {
+                convWorker = component "Worker (convert-tq)" "Đăng ký activity convert, giới hạn số activity chạy song song theo CPU/GPU, chọn OCR engine và Vision LLM" "temporalio.worker, ingest.convert.worker"
+                detectAct = component "detect_format" "Loại file, PDF có lớp text hay không, danh sách trang cần OCR. Trả FormatInfo nhỏ" "@activity.defn, PyMuPDF, ingest.convert.activities"
+                parseAct = component "parse_document" "Parse phần có text, ghi md-raw/{doc_id}/text.md" "@activity.defn, ingest.convert.activities"
+                pdfParser = component "PDF Parser" "Giữ heading, bảng, thứ tự đọc, số trang" "PyMuPDF, pymupdf4llm, ingest.convert.parsers.pdf" "Module"
+                officeParser = component "Office Parser" "DOCX, PPTX, XLSX → Markdown, kèm ảnh, chart, bảng" "MarkItDown (Docling nếu bật), ingest.convert.parsers.extract, docx_*, pptx_media, xlsx_*" "Module"
+                htmlParser = component "HTML / Text Parser" "HTML, TXT, CSV → Markdown" "markdownify, BeautifulSoup, ingest.convert.parsers.html" "Module"
+                ocrAct = component "ocr_pages" "OCR một lô trang (fan-out theo lô), ghi md-raw/{doc_id}/ocr/{batch}.md, heartbeat từng trang, trả điểm tin cậy" "@activity.defn, ingest.convert.ocr, ingest.convert.vision"
+                finalizeAct = component "finalize_markdown" "Ghép text và OCR theo thứ tự trang, chuẩn hóa heading/bảng, bỏ header/footer lặp, thêm front-matter, ghi md/{doc_id}.md" "@activity.defn, python-frontmatter, ingest.convert.parsers.merge"
             }
 
-            indexer = container "Indexing Worker" "Chạy code workflow (điều phối các bước, chờ signal, ghi trạng thái) và activity chia chunk, tạo embedding, ghi Vector DB. Một tiến trình, hai Worker. Scale theo rate limit của embedding API" "Python, temporalio worker, task queue ingest-tq và index-tq" {
-                wfWorker = component "Worker (ingest-tq)" "Đăng ký hai workflow và activity update_status. Không bị rate limit của index-tq" "temporalio.worker"
-                ingestWf = component "DocumentIngestionWorkflow" "detect → parse / OCR → finalize → chunk → embed + upsert → cleanup. Query get_progress, signal review_decision" "@workflow.defn"
-                reindexWf = component "ReindexWorkflow" "Bỏ qua bước convert: chunk → embed + upsert → cleanup với model hoặc cách chunk mới" "@workflow.defn"
-                statusAct = component "update_status" "Ghi trạng thái, số chunk, mã lỗi vào Metadata DB. Ghi lại cùng giá trị không sao" "@activity.defn, SQLAlchemy"
-                idxWorker = component "Worker (index-tq)" "Đăng ký activity index, giới hạn số activity mỗi giây theo rate limit embedding" "temporalio.worker"
-                chunkAct = component "chunk_markdown" "Cắt theo heading rồi theo token (512, overlap 64), gắn metadata, ghi chunks/{doc_id}/v{n}/batch-{i}.jsonl, trả số lô" "@activity.defn, MarkdownHeaderTextSplitter"
-                embedAct = component "embed_and_upsert" "Một lô: đọc JSONL, gọi embed, upsert với id = uuid5(doc_id, version, chunk_index). Vector không đi qua Temporal" "@activity.defn, httpx, qdrant-client"
-                cleanupAct = component "cleanup_old_chunks" "Xóa point của doc_id thuộc index_version cũ" "@activity.defn, qdrant-client"
+            indexer = container "Indexing Worker" "Chạy code workflow (điều phối các bước, chờ signal, ghi trạng thái) và activity chia chunk, tạo embedding, ghi Vector DB. Một tiến trình, hai Worker. Scale theo rate limit của embedding API" "Package ingest-index (packages/index). Python, temporalio worker, task queue ingest-tq và index-tq" {
+                wfWorker = component "Worker (ingest-tq)" "Đăng ký hai workflow và activity update_status. Không bị rate limit của index-tq" "temporalio.worker, ingest.index.worker"
+                ingestWf = component "DocumentIngestionWorkflow" "detect → parse / OCR → finalize → chunk → embed + upsert → cleanup. Query get_progress, signal review_decision" "@workflow.defn, ingest.index.workflows.ingestion"
+                reindexWf = component "ReindexWorkflow" "Bỏ qua bước convert: chunk → embed + upsert → cleanup với model hoặc cách chunk mới" "@workflow.defn, ingest.index.workflows.reindex"
+                statusAct = component "update_status" "Ghi trạng thái, số chunk, mã lỗi vào Metadata DB. Ghi lại cùng giá trị không sao" "@activity.defn, ingest.index.status, ingest.core.db"
+                idxWorker = component "Worker (index-tq)" "Đăng ký activity index, giới hạn số activity mỗi giây theo rate limit embedding" "temporalio.worker, ingest.index.worker"
+                chunkAct = component "chunk_markdown" "Cắt theo heading rồi theo token (512, overlap 64), gắn metadata, ghi chunks/{doc_id}/v{n}/batch-{i}.jsonl, trả số lô" "@activity.defn, MarkdownHeaderTextSplitter, ingest.index.chunking"
+                embedAct = component "embed_and_upsert" "Một lô: đọc JSONL, gọi embed, upsert với id = uuid5(doc_id, version, chunk_index). Vector không đi qua Temporal" "@activity.defn, ingest.index.embedder, ingest.index.vectorstore"
+                cleanupAct = component "cleanup_old_chunks" "Xóa point của doc_id thuộc index_version cũ" "@activity.defn, ingest.index.vectorstore"
             }
 
             objstore = container "Object Storage" "File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất" "MinIO / S3" "Database"
@@ -93,13 +93,13 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
         webui -> statusCtl "Xem tiến độ, duyệt, re-index, huỷ" "REST"
         uploadCtl -> validator "Validate"
         uploadCtl -> dedup "Tính doc_id"
-        dedup -> docRepo "Tra hash"
         uploadCtl -> storageCli "Lưu file"
-        uploadCtl -> docRepo "Tạo document"
+        uploadCtl -> docRepo "get_or_create theo doc_id, cập nhật trạng thái"
         uploadCtl -> wfClient "Khởi động ingestion"
-        statusCtl -> docRepo "Đọc trạng thái"
+        statusCtl -> docRepo "Đọc trạng thái, liệt kê, lọc"
+        statusCtl -> storageCli "Đọc Markdown cuối"
         statusCtl -> wfClient "Query tiến độ, signal duyệt, cancel, start reindex"
-        storageCli -> objstore "PUT raw" "S3 API"
+        storageCli -> objstore "PUT raw, GET md" "S3 API"
         docRepo -> metadb "Đọc / ghi" "SQL"
         wfClient -> temporal "start_workflow, query, signal, cancel" "gRPC"
 
@@ -216,6 +216,10 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
             }
             element "Module" {
                 background #D6E9FB
+                color #000000
+            }
+            element "Core" {
+                background #FFF2CC
                 color #000000
             }
             element "Database" {

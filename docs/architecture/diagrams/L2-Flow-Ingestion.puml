@@ -27,13 +27,13 @@ AddBoundaryTag("Software System", $bgColor="#ffffff", $borderColor="#0b4884", $f
 
 System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System", $tags="Software System") {
   Container(DocumentIngestionSystem.TemporalServer, "Temporal Server", $techn="Temporal (self-hosted, PostgreSQL riêng) hoặc Temporal Cloud", $descr="Lưu lịch sử từng bước của workflow, quản lý task queue, timer, retry; kèm Temporal Web UI", $tags="Container,Temporal", $link="")
-  Container(DocumentIngestionSystem.ConversionWorker, "Conversion Worker", $techn="Python, temporalio worker, task queue convert-tq", $descr="Chạy activity chuyển file gốc sang Markdown. Scale theo CPU/GPU", $tags="Container", $link="")
-  Container(DocumentIngestionSystem.IndexingWorker, "Indexing Worker", $techn="Python, temporalio worker, task queue ingest-tq và index-tq", $descr="Chạy code workflow (điều phối các bước, chờ signal, ghi trạng thái) và activity chia chunk, tạo embedding, ghi Vector DB. Một tiến trình, hai Worker. Scale theo rate limit của embedding API", $tags="Container", $link="")
+  Container(DocumentIngestionSystem.ConversionWorker, "Conversion Worker", $techn="Package ingest-convert (packages/convert). Python, temporalio worker, task queue convert-tq", $descr="Chạy activity chuyển file gốc sang Markdown. Scale theo CPU/GPU", $tags="Container", $link="")
+  Container(DocumentIngestionSystem.IndexingWorker, "Indexing Worker", $techn="Package ingest-index (packages/index). Python, temporalio worker, task queue ingest-tq và index-tq", $descr="Chạy code workflow (điều phối các bước, chờ signal, ghi trạng thái) và activity chia chunk, tạo embedding, ghi Vector DB. Một tiến trình, hai Worker. Scale theo rate limit của embedding API", $tags="Container", $link="")
   ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
   ContainerDb(DocumentIngestionSystem.MetadataDB, "Metadata DB", $techn="PostgreSQL", $descr="Danh mục tài liệu, trạng thái nghiệp vụ, hash, index_version", $tags="Container,Database", $link="")
   ContainerDb(DocumentIngestionSystem.VectorDB, "Vector DB", $techn="Qdrant (hoặc pgvector, Milvus)", $descr="Vector + payload: text chunk, doc_id, heading, trang, index_version", $tags="Container,Database", $link="")
-  Container(DocumentIngestionSystem.WebUICLI, "Web UI / CLI", $techn="React hoặc Typer CLI", $descr="Upload, xem tiến độ, duyệt tài liệu, bấm re-index", $tags="Container,WebBrowser", $link="")
-  Container(DocumentIngestionSystem.IngestionAPI, "Ingestion API", $techn="Python, FastAPI, temporalio client", $descr="Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái", $tags="Container", $link="")
+  Container(DocumentIngestionSystem.WebUICLI, "Web UI / CLI", $techn="Trang HTML tĩnh do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)", $descr="Upload, xem tiến độ, duyệt tài liệu, bấm re-index", $tags="Container,WebBrowser", $link="")
+  Container(DocumentIngestionSystem.IngestionAPI, "Ingestion API", $techn="Package ingest-api (packages/api). Python, FastAPI, temporalio client", $descr="Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái", $tags="Container", $link="")
 }
 
 System(EmbeddingModelProvider, "Embedding Model Provider", $descr="API hoặc model local tạo vector (OpenAI, Voyage, bge-m3…)", $tags="Software System,External", $link="")
