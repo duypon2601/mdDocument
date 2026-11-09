@@ -14,10 +14,6 @@ export function DashboardPage() {
   return <Page title="Tổng quan" />
 }
 
-export function FilesPage() {
-  return <Page title="Tài liệu" />
-}
-
 export function DocumentPage() {
   const { docId } = useParams()
   return <Page title="Chi tiết tài liệu">{docId}</Page>

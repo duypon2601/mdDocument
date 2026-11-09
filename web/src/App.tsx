@@ -3,7 +3,8 @@ import { Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { NotFoundPage } from './pages/NotFound'
-import { DashboardPage, DocumentPage, FilesPage, SearchPage } from './pages/Placeholder'
+import { FilesPage } from './pages/files/FilesPage'
+import { DashboardPage, DocumentPage, SearchPage } from './pages/Placeholder'
 
 export function makeQueryClient() {
   return new QueryClient({
