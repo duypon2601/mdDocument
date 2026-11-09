@@ -85,9 +85,15 @@ export function useChunks(id: string | undefined, params: ChunkParams = {}, enab
   })
 }
 
-/** Tìm kiếm là POST nhưng không đổi dữ liệu, dùng mutation để gọi theo yêu cầu. */
-export function useSearch() {
-  return useMutation({ mutationFn: (body: SearchRequest) => api.search(body) })
+/** Tìm kiếm là POST nhưng không đổi dữ liệu, dùng query để kết quả gắn với tham số trên URL. */
+export function useSearch(body: SearchRequest | null) {
+  return useQuery({
+    queryKey: ['search', body] as const,
+    queryFn: () => api.search(body!),
+    enabled: !!body,
+    retry: false,
+    staleTime: 30_000,
+  })
 }
 
 function refresh(qc: QueryClient) {

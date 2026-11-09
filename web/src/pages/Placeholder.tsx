@@ -12,7 +12,3 @@ function Page({ title }: { title: string }) {
 export function DashboardPage() {
   return <Page title="Tổng quan" />
 }
-
-export function SearchPage() {
-  return <Page title="Tìm kiếm thử" />
-}
