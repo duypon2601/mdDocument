@@ -16,7 +16,7 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
         // ---------- Hệ thống đang thiết kế ----------
         dis = softwareSystem "Document Ingestion System" "Nhận tài liệu, chuyển sang Markdown, chia chunk, tạo embedding và lưu vào Vector DB" {
 
-            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, bấm re-index, xem Markdown và chunk, tìm kiếm thử" "React SPA (thư mục web/, build tĩnh vào packages/api) do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)" "WebBrowser"
+            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, xem Markdown và chunk, tìm kiếm thử. Re-index chỉ có ở CLI" "React SPA (thư mục web/, build tĩnh vào packages/api) do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)" "WebBrowser"
 
             api = container "Ingestion API" "Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái" "Package ingest-api (packages/api). Python, FastAPI, temporalio client" {
                 uploadCtl = component "Upload Controller" "POST /documents (multipart), POST /documents/batch" "FastAPI, ingest.api.app"
@@ -91,7 +91,7 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
 
         // ---------- Level 3: Ingestion API ----------
         webui -> uploadCtl "Upload file" "REST"
-        webui -> statusCtl "Xem tiến độ, duyệt, re-index, huỷ" "REST"
+        webui -> statusCtl "Xem tiến độ, duyệt, huỷ, re-index (CLI)" "REST"
         webui -> searchCtl "Tìm kiếm thử" "REST"
         searchCtl -> embed "Embed câu hỏi" "HTTPS"
         searchCtl -> vectordb "Tìm vector" "gRPC"

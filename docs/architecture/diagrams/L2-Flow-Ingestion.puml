@@ -32,7 +32,7 @@ System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System",
   ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
   ContainerDb(DocumentIngestionSystem.MetadataDB, "Metadata DB", $techn="PostgreSQL", $descr="Danh mục tài liệu, trạng thái nghiệp vụ, hash, index_version", $tags="Container,Database", $link="")
   ContainerDb(DocumentIngestionSystem.VectorDB, "Vector DB", $techn="Qdrant (hoặc pgvector, Milvus)", $descr="Vector + payload: text chunk, doc_id, heading, trang, index_version", $tags="Container,Database", $link="")
-  Container(DocumentIngestionSystem.WebUICLI, "Web UI / CLI", $techn="React SPA (thư mục web/, build tĩnh vào packages/api) do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)", $descr="Upload, xem tiến độ, duyệt tài liệu, bấm re-index, xem Markdown và chunk, tìm kiếm thử", $tags="Container,WebBrowser", $link="")
+  Container(DocumentIngestionSystem.WebUICLI, "Web UI / CLI", $techn="React SPA (thư mục web/, build tĩnh vào packages/api) do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)", $descr="Upload, xem tiến độ, duyệt tài liệu, xem Markdown và chunk, tìm kiếm thử. Re-index chỉ có ở CLI", $tags="Container,WebBrowser", $link="")
   Container(DocumentIngestionSystem.IngestionAPI, "Ingestion API", $techn="Package ingest-api (packages/api). Python, FastAPI, temporalio client", $descr="Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái", $tags="Container", $link="")
 }
 

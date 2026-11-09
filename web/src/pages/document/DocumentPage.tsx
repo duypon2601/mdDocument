@@ -119,9 +119,6 @@ function Detail({ doc }: { doc: DocumentDetail }) {
         )}
         {doc.status === 'INDEXED' && (
           <>
-            <Button disabled={busy} onClick={() => void actions.reindex(doc)}>
-              Re-index
-            </Button>
             <Button onClick={downloadMarkdown}>Tải Markdown</Button>
             <Link
               to={`/search?doc_id=${doc.doc_id}`}

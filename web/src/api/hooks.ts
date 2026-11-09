@@ -122,11 +122,6 @@ export function useReview() {
   })
 }
 
-export function useReindex() {
-  const qc = useQueryClient()
-  return useMutation({ mutationFn: (id: string) => api.reindex(id), onSuccess: () => refresh(qc) })
-}
-
 export function useCancel() {
   const qc = useQueryClient()
   return useMutation({ mutationFn: (id: string) => api.cancel(id), onSuccess: () => refresh(qc) })

@@ -73,7 +73,7 @@ npm run lint && npm run typecheck
 
 Image Docker target `api` tự build `web/` ở stage riêng nên không cần chạy `npm run build` trước.
 
-Màn hình gồm Tổng quan, Tài liệu (upload ba kiểu xử lý v2, v1, bản cũ; lọc; Re-index; Dừng), trang chi tiết (timeline, Markdown, Chunk, Thông tin, Duyệt/Từ chối khi chờ review) và Tìm kiếm thử.
+Màn hình gồm Tổng quan, Tài liệu (upload ba kiểu xử lý v2, v1, bản cũ; lọc; Dừng), trang chi tiết (timeline, Markdown, Chunk, Thông tin, Duyệt/Từ chối khi chờ review) và Tìm kiếm thử. Giao diện không có nút Re-index: việc này chỉ cần khi admin đổi model embedding hoặc cấu hình chunk, nên admin chạy `uv run ingest reindex <id>`.
 
 ## Endpoint API
 

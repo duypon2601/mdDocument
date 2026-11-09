@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ApiError } from '../api/client'
-import { useCancel, useReindex, useReview } from '../api/hooks'
+import { useCancel, useReview } from '../api/hooks'
 import { useToast } from '../components/Toast'
 
 export function errText(e: unknown): string {
@@ -12,11 +12,10 @@ interface Target {
   file_name: string
 }
 
-/** Dừng, Re-index, Duyệt/Từ chối kèm Toast báo kết quả; dùng chung cho bảng và trang chi tiết. */
+/** Dừng, Duyệt/Từ chối kèm Toast báo kết quả; dùng chung cho bảng và trang chi tiết. */
 export function useDocActions() {
   const toast = useToast()
   const cancel = useCancel()
-  const reindex = useReindex()
   const review = useReview()
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -40,13 +39,6 @@ export function useDocActions() {
         () => cancel.mutateAsync(d.doc_id),
         `Đã gửi yêu cầu dừng ${d.file_name}`,
         `Không dừng được ${d.file_name}`,
-      ),
-    reindex: (d: Target) =>
-      run(
-        d,
-        () => reindex.mutateAsync(d.doc_id),
-        `Đã yêu cầu re-index ${d.file_name}`,
-        `Không re-index được ${d.file_name}`,
       ),
     review: (d: Target, decision: 'approve' | 'reject') =>
       run(

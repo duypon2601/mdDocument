@@ -128,7 +128,6 @@ export function FilesPage() {
             items={list.data.items}
             busyId={actions.busyId}
             onStop={setStopping}
-            onReindex={actions.reindex}
           />
           <nav
             aria-label="Phân trang"

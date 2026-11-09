@@ -41,7 +41,7 @@ Nút hành động theo trạng thái:
 |---|---|
 | RECEIVED, CONVERTING, CONVERTED, INDEXING | Dừng |
 | NEEDS_REVIEW | Duyệt, Từ chối, Dừng |
-| INDEXED | Re-index, Tải Markdown |
+| INDEXED | Tải Markdown (Re-index đã bỏ khỏi giao diện, admin dùng CLI) |
 | FAILED, CANCELLED | (upload lại cùng file để chạy lại) |
 | Mọi trạng thái | Tải file gốc |
 

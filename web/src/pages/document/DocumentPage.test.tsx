@@ -47,7 +47,7 @@ describe('nút theo trạng thái', () => {
     ['CONVERTED', ['Dừng']],
     ['INDEXING', ['Dừng']],
     ['NEEDS_REVIEW', ['Duyệt', 'Từ chối', 'Dừng']],
-    ['INDEXED', ['Re-index', 'Tải Markdown']],
+    ['INDEXED', ['Tải Markdown']],
     ['FAILED', []],
     ['CANCELLED', []],
   ]
@@ -96,17 +96,10 @@ describe('hành động', () => {
     await waitFor(() => expect(seen).toEqual(['approve', 'reject']))
   })
 
-  it('Re-index gọi endpoint reindex', async () => {
-    let called = false
-    server.use(
-      http.post('/documents/:id/reindex', () => {
-        called = true
-        return HttpResponse.json({ doc_id: ID, index_version: 2 }, { status: 202 })
-      }),
-    )
+  it('không có nút Re-index (chỉ admin dùng CLI)', async () => {
     open('INDEXED')
-    await userEvent.click(await screen.findByRole('button', { name: 'Re-index' }))
-    await waitFor(() => expect(called).toBe(true))
+    await screen.findByRole('heading', { name: 'bao-cao.pdf' })
+    expect(screen.queryByRole('button', { name: /Re-index/ })).not.toBeInTheDocument()
   })
 })
 

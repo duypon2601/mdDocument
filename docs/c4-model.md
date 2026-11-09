@@ -36,7 +36,7 @@ Temporal là thành phần bên trong hệ thống (tự host), nên không xu�
 
 | Container | Công nghệ đề xuất | Trách nhiệm |
 |---|---|---|
-| Web UI / CLI | React SPA (thư mục `web/`) build tĩnh vào `packages/api` và do API phục vụ, Typer CLI | Upload, xem tiến độ, duyệt tài liệu, bấm re-index, xem Markdown và chunk, tìm kiếm thử |
+| Web UI / CLI | React SPA (thư mục `web/`) build tĩnh vào `packages/api` và do API phục vụ, Typer CLI | Upload, xem tiến độ, duyệt tài liệu, xem Markdown và chunk, tìm kiếm thử. Re-index chỉ có ở CLI |
 | Ingestion API | FastAPI + `temporalio` client | Cổng vào duy nhất: validate, lưu file gốc, tạo document, start workflow, query tiến độ, gửi signal và cancel. Có thêm `POST /search` (Search Controller) để tìm thử trên Qdrant |
 | Temporal Server | Temporal 1.32.2 self-hosted (PostgreSQL riêng) | Lưu lịch sử workflow, giữ task queue, timer, retry. Temporal Web UI cho quản trị viên xem từng bước, retry, terminate |
 | Conversion Worker | Docling, MarkItDown, PyMuPDF, task queue `convert-tq` | Activity chuyển file sang Markdown. Scale theo CPU/GPU vì OCR nặng |

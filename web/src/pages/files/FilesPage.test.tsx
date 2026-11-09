@@ -147,20 +147,10 @@ describe('nút trên dòng', () => {
     expect(called).toBe(false)
   })
 
-  it('Re-index chỉ có ở INDEXED và gọi đúng endpoint', async () => {
-    const calls: string[] = []
-    server.use(
-      http.post('/documents/:id/reindex', ({ params }) => {
-        calls.push(String(params.id))
-        return HttpResponse.json({ doc_id: params.id, index_version: 2 }, { status: 202 })
-      }),
-    )
+  it('không có nút Re-index trên bảng', async () => {
     at()
     await screen.findByText('loi.pdf')
-    expect(screen.getAllByRole('button', { name: /^Re-index / })).toHaveLength(1)
-    await userEvent.click(screen.getByRole('button', { name: 'Re-index bao-cao-tai-chinh.xlsx' }))
-    await waitFor(() => expect(calls).toEqual([sampleDocs[0].doc_id]))
-    expect(await screen.findByText(/Đã yêu cầu re-index/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Re-index/ })).not.toBeInTheDocument()
   })
 })
 

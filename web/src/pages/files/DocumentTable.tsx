@@ -9,12 +9,11 @@ import { isRunning } from '../../lib/status'
 interface Props {
   items: Document[]
   onStop: (d: Document) => void
-  onReindex: (d: Document) => void
   busyId?: string | null
 }
 
 /** Bảng ở màn rộng, mỗi dòng thành một thẻ ở màn hẹp (CSS, cùng một cấu trúc DOM). */
-export function DocumentTable({ items, onStop, onReindex, busyId }: Props) {
+export function DocumentTable({ items, onStop, busyId }: Props) {
   const navigate = useNavigate()
   const cell = 'px-3 py-2 max-md:flex max-md:justify-between max-md:gap-3 max-md:py-1'
   const label = 'text-muted md:hidden'
@@ -83,15 +82,6 @@ export function DocumentTable({ items, onStop, onReindex, busyId }: Props) {
                       onClick={() => onStop(d)}
                     >
                       Dừng
-                    </Button>
-                  )}
-                  {d.status === 'INDEXED' && (
-                    <Button
-                      disabled={busyId === d.doc_id}
-                      aria-label={`Re-index ${d.file_name}`}
-                      onClick={() => onReindex(d)}
-                    >
-                      Re-index
                     </Button>
                   )}
                 </span>
