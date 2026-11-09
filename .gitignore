@@ -13,3 +13,7 @@ htmlcov/
 # Hệ điều hành, file khoá của Office
 .DS_Store
 ~$*
+
+# Frontend (web/)
+web/node_modules/
+packages/api/src/ingest/api/static/dist/
