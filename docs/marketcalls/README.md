@@ -9,7 +9,7 @@ Thư mục này lưu trữ mô hình kiến trúc C4 và mã nguồn tham khảo
   - [`architecture/workspace.dsl`](architecture/workspace.dsl): Mô hình kiến trúc gốc viết bằng Structurizr DSL.
   - [`architecture/render.sh`](architecture/render.sh): Script Docker kết xuất DSL ra PlantUML, SVG và PNG.
   - [`architecture/diagrams/`](architecture/diagrams/): Thư mục chứa các sơ đồ kiến trúc đã render.
-- [`openrag/`](openrag/): Mã nguồn dự án `openrag` phục vụ chạy thử nghiệm cục bộ và đối chiếu triển khai.
+- Mã nguồn `openrag` không lưu trong repo này. Muốn chạy thử hay đối chiếu thì clone từ [https://github.com/marketcalls/openrag](https://github.com/marketcalls/openrag).
 
 ## Kết xuất lại sơ đồ kiến trúc
 

@@ -1,6 +1,6 @@
 # Third-party notices
 
-Một số file trong `packages/` được chuyển thể từ rag-starter (docs/KashifAgha/rag-starter), giấy phép MIT:
+Một số file trong `packages/` được chuyển thể từ [rag-starter](https://github.com/KashifAgha/rag-starter), giấy phép MIT:
 
 - `packages/convert/src/ingest/convert/parsers/extract.py` (từ `backend/rag/extract.py`)
 - `packages/core/src/ingest/core/markdown.py`, phần `Piece` và `split_markdown_tables` (từ `backend/rag/extract.py`)

@@ -76,4 +76,4 @@ uv sync --extra docling --extra ocr
 
 ## Nguồn mã
 
-Một phần mã lấy từ [rag-starter](docs/KashifAgha/rag-starter) (MIT). Chi tiết trong [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Một phần mã lấy từ [rag-starter](https://github.com/KashifAgha/rag-starter) (MIT). Chi tiết trong [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

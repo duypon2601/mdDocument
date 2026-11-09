@@ -9,7 +9,7 @@ Thư mục này lưu trữ mô hình kiến trúc C4 và mã nguồn tham khảo
   - [`architecture/workspace.dsl`](architecture/workspace.dsl): Mô hình kiến trúc gốc viết bằng Structurizr DSL.
   - [`architecture/render.sh`](architecture/render.sh): Script Docker kết xuất DSL ra PlantUML, SVG và PNG.
   - [`architecture/diagrams/`](architecture/diagrams/): Thư mục chứa các sơ đồ kiến trúc đã render.
-- [`rag-starter/`](rag-starter/): Mã nguồn dự án `rag-starter` phục vụ chạy thử nghiệm cục bộ và đối chiếu triển khai.
+- Mã nguồn `rag-starter` không lưu trong repo này. Muốn chạy thử hay đối chiếu thì clone từ [https://github.com/KashifAgha/rag-starter](https://github.com/KashifAgha/rag-starter).
 
 ## Kết xuất lại sơ đồ kiến trúc
 
