@@ -25,7 +25,7 @@ export const keys = {
   documents: ['documents'] as const,
   list: (p: ListParams) => ['documents', 'list', p] as const,
   document: (id: string) => ['documents', 'detail', id] as const,
-  markdown: (id: string) => ['documents', 'markdown', id] as const,
+  markdown: (id: string, stamp = '') => ['documents', 'markdown', id, stamp] as const,
   chunks: (id: string, p: ChunkParams) => ['documents', 'chunks', id, p] as const,
   stats: ['stats'] as const,
 }
@@ -66,9 +66,10 @@ export function useStats() {
   })
 }
 
-export function useMarkdown(id: string | undefined, enabled = true) {
+/** `stamp` đổi khi tài liệu đổi trạng thái hoặc được cập nhật, để Markdown cũ (kể cả 404) không bị giữ lại. */
+export function useMarkdown(id: string | undefined, enabled = true, stamp = '') {
   return useQuery({
-    queryKey: keys.markdown(id ?? ''),
+    queryKey: keys.markdown(id ?? '', stamp),
     queryFn: () => api.getMarkdown(id!),
     enabled: !!id && enabled,
     retry: (count, err) => (err as { status?: number }).status !== 404 && count < 2,

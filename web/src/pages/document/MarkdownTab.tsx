@@ -14,7 +14,7 @@ const WAITING = ['RECEIVED', 'CONVERTING']
 
 export function MarkdownTab({ doc }: { doc: DocumentDetail }) {
   const waiting = WAITING.includes(doc.status)
-  const md = useMarkdown(doc.doc_id, !waiting)
+  const md = useMarkdown(doc.doc_id, !waiting, `${doc.status}|${doc.updated_at}`)
   const [raw, setRaw] = useState(false)
 
   if (waiting) return <Note>Markdown sẽ hiện khi chuyển đổi xong.</Note>

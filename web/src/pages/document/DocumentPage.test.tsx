@@ -226,3 +226,40 @@ describe('không tìm thấy', () => {
     expect(await screen.findByText('danh sách')).toBeInTheDocument()
   })
 })
+
+describe('tab Markdown khi trạng thái đổi', () => {
+  it('tải lại Markdown khi tài liệu từ NEEDS_REVIEW sang INDEXED', async () => {
+    let status: Status = 'NEEDS_REVIEW'
+    let updated = '2026-01-01T00:00:00Z'
+    server.use(
+      http.get('/documents/:id', () =>
+        HttpResponse.json({
+          ...doc(ID, 'bao-cao.pdf', status, { updated_at: updated }),
+          progress: null,
+        }),
+      ),
+      http.get('/documents/:id/markdown', () =>
+        status === 'INDEXED'
+          ? HttpResponse.text('# Đã có')
+          : HttpResponse.json({ detail: 'chưa có' }, { status: 404 }),
+      ),
+    )
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[`/files/${ID}`]}>
+            <Routes>
+              <Route path="/files/:docId" element={<DocumentPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText('Chưa có Markdown cho tài liệu này.')).toBeInTheDocument()
+    status = 'INDEXED'
+    updated = '2026-01-01T00:01:00Z'
+    await qc.invalidateQueries({ queryKey: ['documents', 'detail'] })
+    expect(await screen.findByRole('heading', { name: 'Đã có' })).toBeInTheDocument()
+  })
+})
