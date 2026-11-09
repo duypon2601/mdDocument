@@ -1,0 +1,73 @@
+@startuml
+title <size:24>Component View: RAG Starter System - Ingestion Worker</size>\n<size:24>Level 3 - Component: Ingestion Worker (Celery)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#2a6f97", $borderColor="#1d4d69", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System(LLMVLMProvider, "LLM / VLM Provider", $descr="Cung cấp model sinh câu trả lời, nhận diện ngôn ngữ, rephrase câu hỏi và tóm tắt trang (OpenAI, Azure, OpenRouter, vLLM hoặc Ollama)", $tags="Software System,External", $link="")
+System(EmbeddingProvider, "Embedding Provider", $descr="Tạo vector nhúng ngữ nghĩa (OpenAI text-embedding-3-small, FastEmbed, hoặc Ollama nomic-embed-text)", $tags="Software System,External", $link="")
+System(Nguồntàiliệutừxa, "Nguồn tài liệu từ xa", $descr="Trích xuất nội dung từ Website (sitemap XML) hoặc không gian Atlassian Confluence", $tags="Software System,External", $link="")
+
+System_Boundary("RAGStarterSystem_boundary", "RAG Starter System", $tags="Software System") {
+  Container_Boundary("RAGStarterSystem.IngestionWorker_boundary", "Ingestion Worker", $tags="Container") {
+    Component(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, "Celery Task Runner", $techn="Celery shared_task", $descr="Thực thi tác vụ ingest_document_task & enrich_document_task, bảo vệ chống OOM lặp lại bằng Redis attempts tracking", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.SecurityUploadValidator, "Security & Upload Validator", $techn="python-magic, ipaddress", $descr="Kiểm tra MIME magic-byte, chặn path traversal, chặn SSRF khi tải URL/sitemap từ xa", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.RemoteSourceExtractor, "Remote Source Extractor", $techn="Trafilatura, Confluence REST Client", $descr="Cào dữ liệu web từ URL/sitemap (Trafilatura) hoặc đọc không gian tài liệu Confluence", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.DocumentExtractionChain, "Document Extraction Chain", $techn="Docling, MarkItDown, pypdf", $descr="Chuỗi giải nén tài liệu theo thứ tự ưu tiên: Docling (OCR/bảng) → MarkItDown → pypdf → Plain text", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.ChunkingService, "Chunking Service", $techn="LangChain Splitter", $descr="Cắt Markdown theo cấu trúc heading, giữ nguyên vẹn bảng biểu, tính content hash sha256", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.PageSummarizerCaptioner, "Page Summarizer & Captioner", $techn="LangChain LLM, VLM", $descr="Tóm tắt từng trang bằng LLM (SUMMARY chunk) và chú thích ảnh bằng VLM (IMAGE chunk)", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.VectorIndexerStoreClient, "Vector Indexer & Store Client", $techn="qdrant-client, fastembed", $descr="Sinh dense vector & BM25 sparse vector, upsert idempotent vào Qdrant theo tenant owner_id", $tags="Component", $link="")
+    Component(RAGStarterSystem.IngestionWorker.ObjectStorageClient, "Object Storage Client", $techn="Boto3 / MinIO SDK", $descr="Lưu và đọc file tài liệu gốc vào MinIO bucket", $tags="Component", $link="")
+  }
+
+  ContainerDb(RAGStarterSystem.MessageBrokerCache, "Message Broker & Cache", $techn="Redis 7", $descr="Hàng đợi tác vụ Celery, bộ đếm số lần worker lost và cache chia sẻ", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.ObjectStorage, "Object Storage", $techn="MinIO (S3 compatible)", $descr="Lưu trữ file tài liệu gốc tải lên, phục vụ tải về và đối chiếu trích dẫn nguồn", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.VectorDatabase, "Vector Database", $techn="Qdrant 1.12", $descr="Lưu trữ hybrid vectors (dense + BM25 sparse) và payload, phân vùng dữ liệu theo tenant (owner_id)", $tags="Container,Database", $link="")
+  Container(RAGStarterSystem.BackendAPIService, "Backend API Service", $techn="Python 3.13, Django 5.1, DRF, Gunicorn, LangChain, LangGraph", $descr="Cung cấp REST API, xác thực JWT, điều phối LangGraph, stream SSE và quản lý CRUD tài liệu", $tags="Container", $link="")
+}
+
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.MessageBrokerCache, "Đẩy tác vụ ingest vào queue, đọc/ghi cache", $techn="Redis protocol (TCP 6379)", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.ObjectStorage, "Lưu file upload ban đầu, tạo presigned URL tải file", $techn="S3 API (TCP 9000)", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.VectorDatabase, "Truy vấn hybrid search (dense + BM25 sparse) kèm filter owner_id", $techn="HTTP/gRPC (TCP 6333)", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, LLMVLMProvider, "Gọi LLM suy luận, rephrase, generate câu trả lời", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, EmbeddingProvider, "Tạo embedding câu hỏi", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.MessageBrokerCache, RAGStarterSystem.IngestionWorker.CeleryTaskRunner, "Nhận task ingest_document_task(doc_id)", $techn="Celery", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.MessageBrokerCache, "Tăng bộ đếm worker loss attempts (chặn lặp OOM)", $techn="Redis INCR", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.BackendAPIService, "Cập nhật Document status sang PROCESSING", $techn="ORM", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.ObjectStorageClient, "Đọc file gốc từ MinIO", $techn="S3 API", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.ObjectStorageClient, RAGStarterSystem.ObjectStorage, "Đọc/ghi bucket S3", $techn="S3 API", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.SecurityUploadValidator, "Kiểm tra định dạng file thực và bảo vệ SSRF", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.RemoteSourceExtractor, "Trích xuất nội dung URL/sitemap/Confluence", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.RemoteSourceExtractor, Nguồntàiliệutừxa, "Tải dữ liệu từ xa", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.DocumentExtractionChain, "Trích xuất tài liệu sang Markdown (Docling → MarkItDown → pypdf)", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.ChunkingService, "Chia nhỏ Markdown theo heading, giữ bảng biểu nguyên vẹn", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.PageSummarizerCaptioner, "Tạo page summaries (LLM) và captions ảnh (VLM)", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.PageSummarizerCaptioner, LLMVLMProvider, "Gọi LLM/VLM tạo summary và caption", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.CeleryTaskRunner, RAGStarterSystem.IngestionWorker.VectorIndexerStoreClient, "Tạo embeddings (dense + sparse) và upsert vào Qdrant", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.VectorIndexerStoreClient, EmbeddingProvider, "Gọi API sinh dense vectors", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker.VectorIndexerStoreClient, RAGStarterSystem.VectorDatabase, "Upsert points với ID = hash nội dung (idempotent)", $techn="gRPC/HTTP", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

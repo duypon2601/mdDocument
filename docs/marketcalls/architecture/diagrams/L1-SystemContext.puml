@@ -1,0 +1,40 @@
+@startuml
+title <size:24>System Context View: OpenRAG Platform</size>\n<size:24>Level 1 - System Context: OpenRAG Platform</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+AddElementTag("Software System", $bgColor="#1168bd", $borderColor="#0b4884", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Person", $bgColor="#08427b", $borderColor="#052e56", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+Person(Ngườidùng, "Người dùng", $descr="Đăng nhập tài khoản, quản lý tài liệu trong workspace, tra cứu tri thức qua chat, nhận câu trả lời có trích dẫn nguồn và biểu đồ phân tích", $tags="Person", $link="")
+Person(Quảntrịviên, "Quản trị viên", $descr="Quản lý tổ chức, phân quyền RBAC, đăng ký mô hình LLM, giám sát hạn ngạch token và đánh giá chất lượng RAG", $tags="Person", $link="")
+System(LLMVLMProvider, "LLM / VLM Provider", $descr="Cung cấp mô hình ngôn ngữ lớn (OpenAI GPT-5.6, Azure OpenAI, Anthropic, Bedrock, vLLM, Ollama) qua thư viện LiteLLM nhúng trong tiến trình", $tags="Software System,External", $link="")
+System(EmbeddingProvider, "Embedding Provider", $descr="Cung cấp mô hình nhúng vector ngữ nghĩa (Text Embeddings Inference TEI nội bộ hoặc nhà cung cấp hosted qua LiteLLM)", $tags="Software System,External", $link="")
+System(Nguồndữliệungoài, "Nguồn dữ liệu ngoài", $descr="Kết nối đồng bộ tài liệu từ lưu trữ đám mây, ổ đĩa chia sẻ hoặc trang web", $tags="Software System,External", $link="")
+System(ObservabilityPlatform, "Observability Platform", $descr="Hạ tầng giám sát OpenTelemetry thu thập traces, metrics và logs (Prometheus, Grafana, Loki, Tempo)", $tags="Software System,External", $link="")
+System(OpenRAGPlatform, "OpenRAG Platform", $descr="Hệ thống AI Assistant doanh nghiệp mã nguồn mở, tự host, hỗ trợ truy xuất tri thức có bằng chứng xác minh, phân quyền đa tầng và kiểm soát mô hình nghiêm ngặt", $tags="Software System", $link="")
+
+Rel(Ngườidùng, OpenRAGPlatform, "Upload tài liệu, trò chuyện tra cứu có trích dẫn nguồn, khám phá biểu đồ phân tích", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(Quảntrịviên, OpenRAGPlatform, "Quản trị người dùng/workspace, phân quyền RBAC, cấu hình mô hình LLM, giám sát hạn ngạch", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform, LLMVLMProvider, "Gửi prompt chat, lập kế hoạch tác tử, stream câu trả lời, sinh biểu đồ phân tích", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform, EmbeddingProvider, "Sinh vector nhúng ngữ nghĩa (dense / sparse) cho đoạn văn bản", $techn="HTTP / gRPC", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform, Nguồndữliệungoài, "Đồng bộ tài liệu định kỳ từ kho lưu trữ bên ngoài", $techn="HTTPS / S3 API", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform, ObservabilityPlatform, "Xuất traces, metrics và logs hiệu năng qua OpenTelemetry", $techn="gRPC / OTLP", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagram - Giai đoạn 3: Chunk, Embedding & Vector DB</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mermaid.js CDN -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      sequence: {
+        actorMargin: 50,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 35,
+        mirrorActors: true,
+        useMaxWidth: true
+      }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-6xl mx-auto space-y-8">
+
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            C4 Model • Level 2 Sequence Flow
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">
+            Giai đoạn 3: Chunk, Embedding và ghi Vector DB (Indexing Phase)
+          </h1>
+          <p class="text-slate-500 mt-1 text-sm sm:text-base">
+            Bắt đầu từ <code class="bg-slate-100 px-1 rounded text-xs">md/{doc_id}.md</code> mà giai đoạn 2 để lại, kết thúc khi tài liệu ở trạng thái <code class="bg-slate-100 px-1 rounded text-xs">INDEXED</code> và ứng dụng RAG tìm được nó.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-mono font-medium">
+            Task Queue: index-tq
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sequence Diagram Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 overflow-x-auto">
+      <h2 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Sơ đồ tuần tự tương tác (Sequence Diagram)
+      </h2>
+
+      <div class="mermaid flex justify-center">
+sequenceDiagram
+    autonumber
+    participant API as Ingestion API
+    participant DB as Metadata DB (PostgreSQL)
+    participant WF as Indexing Worker: workflow (ingest-tq)
+    participant MinIO as Object Storage (MinIO)
+    participant IW as Indexing Worker: activity (index-tq)
+    participant EMB as Embedding Model Provider
+    participant VDB as Vector DB (Qdrant)
+    participant RAG as Ứng dụng RAG / Search
+
+    Note over WF, IW: Cùng một tiến trình worker index, hai Worker poll hai queue. Mũi tên giữa chúng vẫn đi qua Temporal Server. Rate limit chỉ đặt trên index-tq
+    alt Nối tiếp DocumentIngestionWorkflow
+        Note over WF: Sau CONVERTED, cùng workflow chạy tiếp với index_version = 1
+    else Re-index (ingest reindex hoặc POST /documents/{id}/reindex)
+        API->>WF: start_workflow(ReindexWorkflow, id = reindex-{doc_id}-v{n}, task_queue = ingest-tq), n = index_version + 1
+    end
+    Note over WF: BẮT ĐẦU GIAI ĐOẠN 3 (đã có md/{doc_id}.md)
+    WF->>DB: update_status("INDEXING", index_version)
+
+    %% Bước 6: Chia chunk
+    Note over WF, IW: CHIA CHUNK (chunk_markdown)
+    WF->>IW: execute_activity("chunk_markdown", doc_id, index_version)
+    activate IW
+    IW->>MinIO: GET md/{doc_id}.md
+    IW->>IW: Cắt theo heading, rồi theo token (512, overlap 64). Bảng không bị cắt đôi
+    IW->>IW: Gắn metadata: heading_path, page_start, page_end, chunk_index
+    IW->>MinIO: PUT chunks/{doc_id}/v{n}/batch-{i}.jsonl (100 chunk mỗi lô)
+    IW-->>WF: Trả về số lô (batch_count)
+    deactivate IW
+
+    %% Bước 7: Fan-out embed + upsert
+    rect rgb(243, 244, 246)
+        Note over WF, VDB: FAN-OUT: MỖI LÔ CHUNK LÀ MỘT ACTIVITY embed_and_upsert
+        loop Mỗi batch_index từ 0 đến batch_count - 1 (chạy song song)
+            WF->>IW: execute_activity("embed_and_upsert", doc_id, index_version, batch_index)
+            IW->>MinIO: GET chunks/{doc_id}/v{n}/batch-{i}.jsonl
+            IW->>IW: Kiểm tra mỗi chunk không vượt embed_max_tokens (mặc định 8192)
+            IW->>EMB: Batch embed các chunk text
+            alt Bị giới hạn tốc độ (HTTP 429)
+                EMB-->>IW: 429 Too Many Requests
+                Note over IW, WF: Activity lỗi, Temporal retry tối đa 8 lần, backoff 2s nhân 2, tối đa 5 phút
+            else Thành công
+                EMB-->>IW: Danh sách vector
+                IW->>VDB: Upsert point, id = uuid5(doc_id, index_version, chunk_index)
+                IW-->>WF: Trả về số point đã ghi
+            end
+        end
+    end
+
+    opt Chunk vượt giới hạn token, hoặc API báo input quá dài (EMBED_INPUT_TOO_LONG)
+        Note over WF: Lỗi non_retryable, không retry
+        WF->>DB: update_status("FAILED", error="EMBED_INPUT_TOO_LONG")
+        Note over WF: Workflow kết thúc ở trạng thái Failed
+    end
+
+    %% Bước 8: Dọn version cũ
+    Note over WF, VDB: DỌN BẢN CŨ (cleanup_old_chunks)
+    WF->>IW: execute_activity("cleanup_old_chunks", doc_id, index_version)
+    activate IW
+    IW->>VDB: Delete point của doc_id có index_version khác bản hiện tại
+    IW->>MinIO: Xóa chunks/{doc_id}/ của các version cũ
+    IW-->>WF: Hoàn tất (số point đã xoá)
+    deactivate IW
+
+    WF->>DB: update_status("INDEXED", chunk_count, index_version, embedding_model)
+    Note over WF: KẾT THÚC WORKFLOW
+
+    %% Sau khi index xong
+    Note over RAG, VDB: TÀI LIỆU SẴN SÀNG CHO TRUY VẤN
+    RAG->>VDB: Tìm kiếm vector (lọc theo payload nếu cần)
+    VDB-->>RAG: Chunk text + doc_id, heading_path, số trang
+    RAG->>MinIO: Lấy Markdown gốc khi cần trích dẫn
+      </div>
+    </div>
+
+    <!-- Chi tiết kỹ thuật từng bước -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Card 1 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">1</span>
+          <h3>Chunk và embedding theo lô</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs">chunk_markdown</code> cắt theo cấu trúc heading trước, theo độ dài sau. Mỗi chunk giữ heading path và số trang để RAG trích dẫn được nguồn.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs">embed_and_upsert</code> chỉ nhận <code class="bg-slate-100 px-1 rounded text-xs">(doc_id, index_version, batch_index)</code> rồi tự đọc lô chunk từ storage. Vector nặng hàng MB nên không đi qua Temporal.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span>Worker đặt rate limit bằng <code class="bg-slate-100 px-1 rounded text-xs">max_task_queue_activities_per_second</code> (mặc định 5 activity mỗi giây) theo hạn mức của embedding API. Lỗi 429 thì để Temporal retry.</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">2</span>
+          <h3>Ghi lại không sinh bản trùng, re-index không gián đoạn</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span>Point id là <code class="bg-slate-100 px-1 rounded text-xs">uuid5(doc_id, index_version, chunk_index)</code>, nên một lô có chạy lại sau retry thì upsert vẫn không sinh bản trùng.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span>Version mới được ghi xong rồi <code class="bg-slate-100 px-1 rounded text-xs">cleanup_old_chunks</code> mới xóa version cũ, cả point trên Qdrant lẫn file chunk trên MinIO. Trong lúc đó RAG vẫn tìm được bản cũ.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><code class="bg-slate-100 px-1 rounded text-xs">ReindexWorkflow</code> chạy đúng giai đoạn này (bước 6 đến 8) khi đổi model embedding hoặc đổi cách chunk, không cần convert lại file gốc.</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-400 py-4">
+      Document Ingestion System • Giai đoạn 3: Indexing
+    </footer>
+
+  </div>
+</body>
+</html>

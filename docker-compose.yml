@@ -1,0 +1,207 @@
+name: ingest
+
+x-app: &app
+  restart: unless-stopped
+  profiles: ["app"]
+  environment: &app-env
+    INGEST_TEMPORAL_ADDRESS: temporal:7233
+    INGEST_DATABASE_URL: postgresql+psycopg://ingest:ingest@postgres:5432/ingest
+    INGEST_S3_ENDPOINT: http://minio:9000
+    INGEST_S3_ACCESS_KEY: ${INGEST_S3_ACCESS_KEY:-minioadmin}
+    INGEST_S3_SECRET_KEY: ${INGEST_S3_SECRET_KEY:-minioadmin}
+    INGEST_S3_BUCKET: ${INGEST_S3_BUCKET:-ingest}
+    INGEST_QDRANT_URL: http://qdrant:6333
+    INGEST_EMBED_BASE_URL: ${INGEST_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  depends_on:
+    postgres:
+      condition: service_healthy
+    temporal:
+      condition: service_healthy
+    temporal-namespace:
+      condition: service_completed_successfully
+    qdrant:
+      condition: service_healthy
+    minio-init:
+      condition: service_completed_successfully
+
+services:
+  # Metadata của ứng dụng
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    ports:
+      - "${INGEST_PG_HOST_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: ingest
+      POSTGRES_PASSWORD: ingest
+      POSTGRES_DB: ingest
+    volumes:
+      - app-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingest -d ingest"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Postgres riêng cho Temporal
+  temporal-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - temporal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Chạy một lần: tạo database và tạo/nâng schema (an toàn khi chạy lại, dùng được cho volume 1.25 cũ)
+  temporal-schema:
+    image: temporalio/admin-tools:1.32.2
+    restart: "no"
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      SQL_HOST: temporal-postgres
+      SQL_USER: temporal
+      SQL_PASSWORD: temporal
+    volumes:
+      - ./deploy/temporal/setup-schema.sh:/setup-schema.sh:ro
+    entrypoint: ["/bin/sh", "/setup-schema.sh"]
+
+  # Image server 1.32 không còn auto-setup. Không có file config thì server tự render
+  # config từ biến môi trường (DB, POSTGRES_SEEDS...), giống auto-setup cũ.
+  temporal:
+    image: temporalio/server:1.32.2
+    restart: unless-stopped
+    depends_on:
+      temporal-schema:
+        condition: service_completed_successfully
+    ports:
+      - "${INGEST_TEMPORAL_HOST_PORT:-7233}:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/dynamicconfig/development.yaml
+    volumes:
+      - ./deploy/temporal/dynamicconfig:/etc/temporal/dynamicconfig:ro
+    healthcheck:
+      # Image server chỉ có temporal-server và busybox; kiểm tra cổng frontend đã mở
+      test: ["CMD-SHELL", "nc -z $$(hostname -i) 7233"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  # Chạy một lần: tạo namespace default (bỏ qua nếu đã có)
+  temporal-namespace:
+    image: temporalio/admin-tools:1.32.2
+    restart: "no"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in $$(seq 1 30); do
+          temporal operator cluster health >/dev/null 2>&1 && break
+          sleep 2
+        done
+        temporal operator namespace describe default >/dev/null 2>&1 ||
+          temporal operator namespace create --retention 72h default
+
+  temporal-ui:
+    image: temporalio/ui:2.58.0
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "${INGEST_TEMPORAL_UI_HOST_PORT:-8080}:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8080
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "${INGEST_MINIO_HOST_PORT:-9000}:9000"
+      - "${INGEST_MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${INGEST_S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${INGEST_S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Chạy một lần để tạo bucket
+  minio-init:
+    # Image minio/mc đã bị gỡ khỏi Docker Hub; image server có sẵn mc
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      S3_ACCESS_KEY: ${INGEST_S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${INGEST_S3_SECRET_KEY:-minioadmin}
+      S3_BUCKET: ${INGEST_S3_BUCKET:-ingest}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.6
+    restart: unless-stopped
+    ports:
+      - "${INGEST_QDRANT_HOST_PORT:-6333}:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      # Image distroless, không có curl/wget
+      test: ["CMD", "/qdrant/qdrant", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Profile "app": docker compose --profile app up -d --build
+  api:
+    <<: *app
+    build: { context: ., target: api }
+    ports:
+      - "${INGEST_API_HOST_PORT:-8000}:8000"
+
+  worker-convert:
+    <<: *app
+    build: { context: ., target: convert }
+
+  worker-index:
+    <<: *app
+    build: { context: ., target: index }
+
+volumes:
+  app-postgres-data:
+  temporal-postgres-data:
+  minio-data:
+  qdrant-data:

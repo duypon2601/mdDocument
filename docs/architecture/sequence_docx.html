@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagram - Luồng xử lý file Word (.docx)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      sequence: {
+        actorMargin: 50,
+        boxMargin: 12,
+        boxTextMargin: 8,
+        noteMargin: 12,
+        messageMargin: 36,
+        useMaxWidth: true
+      }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center">
+      <span class="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full mb-2">
+        Sơ đồ tuần tự • Task Queue: convert-tq
+      </span>
+      <h1 class="text-2xl font-bold text-slate-900">Luồng xử lý file Word (.docx) có chữ, bảng, chart và ảnh</h1>
+      <p class="text-slate-500 text-sm mt-1">Từ lúc upload tới khi có <code class="bg-slate-100 px-1 rounded text-xs">md/{doc_id}.md</code>. Phần chunk và embedding xem ở <a class="text-blue-600 underline" href="sequence_phase3.html">giai đoạn 3</a>.</p>
+    </div>
+
+    <!-- Sequence Diagram Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 overflow-x-auto">
+      <div class="mermaid flex justify-center">
+sequenceDiagram
+    autonumber
+    actor Client as Người dùng / CLI
+    participant API as Ingestion API
+    participant DB as Metadata DB
+    participant MinIO as Object Storage (MinIO)
+    participant WF as Indexing Worker: workflow (ingest-tq)
+    participant CW as Conversion Worker (convert-tq)
+    participant OCR as OCR (Tesseract / RapidOCR)
+    participant VLM as Vision LLM (tùy chọn)
+
+    Note over WF, CW: Mũi tên giữa hai worker đi qua Temporal Server: workflow xếp activity vào task queue, worker poll queue rồi gửi kết quả lại cho server
+    Note over Client, WF: 1. TIẾP NHẬN FILE WORD
+    Client->>API: POST /documents (tailieu.docx)
+    API->>API: Kiểm tra MIME thật và dung lượng, doc_id = hash(file, extract_media, pipeline_version)
+    API->>DB: get_or_create document (RECEIVED)
+    opt File đã có và không ở trạng thái chạy lại được
+        API-->>Client: duplicate = true, không tạo workflow mới
+    end
+    API->>MinIO: PUT raw/{doc_id}/tailieu.docx
+    API->>DB: set_status(RECEIVED)
+    API->>WF: start_workflow(DocumentIngestionWorkflow, id = ingest-{doc_id}, task_queue = ingest-tq)
+    API-->>Client: 202 Accepted
+
+    Note over WF, CW: 2. PHÁT HIỆN ĐỊNH DẠNG (detect_format)
+    WF->>DB: update_status(CONVERTING)
+    WF->>CW: execute_activity("detect_format")
+    CW->>MinIO: GET raw/{doc_id}/tailieu.docx
+    CW->>CW: Có thư mục word/media/ không? Liệt kê các slot ảnh raster từ 2 KB (bỏ emf, wmf, svg)
+    CW-->>WF: FormatInfo, ocr_page_batches = các lô 10 slot ảnh
+    Note over WF, CW: Không có ảnh thì danh sách lô rỗng, bỏ qua OCR
+
+    Note over WF, VLM: 3. BÓC CHỮ VÀ ĐỌC ẢNH CHẠY SONG SONG
+    par parse_document
+        WF->>CW: execute_activity("parse_document")
+        CW->>MinIO: GET raw
+        CW->>CW: Thay mỗi chart gốc (word/charts) bằng một token chữ
+        CW->>CW: MarkItDown (mammoth) chuyển sang Markdown, giữ heading, đoạn văn, bảng
+        CW->>CW: Điền bảng dữ liệu đọc từ XML của chart vào chỗ token
+        CW->>CW: Ảnh base64 trong Markdown thay bằng marker image kèm tên ảnh
+        CW->>MinIO: PUT md-raw/{doc_id}/text.md
+        CW-->>WF: PartResult
+    and ocr_pages (mỗi lô một activity)
+        WF->>CW: execute_activity("ocr_pages", batch)
+        loop Mỗi ảnh trong lô
+            CW-->>WF: Heartbeat
+            CW->>OCR: Đọc chữ trong ảnh
+            OCR-->>CW: text, confidence
+            opt Chart, sơ đồ, bảng chụp, tin cậy thấp hoặc sai dấu tiếng Việt
+                CW->>VLM: Gửi ảnh đã thu nhỏ
+                VLM-->>CW: Markdown: bảng số liệu hoặc mô tả ngắn
+            end
+        end
+        CW->>MinIO: PUT md-raw/{doc_id}/ocr/{batch}.md
+        CW-->>WF: OcrResult (confidence)
+    end
+
+    Note over WF, CW: 4. GỘP MARKDOWN (finalize_markdown)
+    WF->>CW: execute_activity("finalize_markdown")
+    CW->>MinIO: GET md-raw/{doc_id}/text.md và ocr/*.md
+    CW->>CW: Chèn nội dung từng ảnh vào đúng chỗ marker, thêm front-matter
+    CW->>MinIO: PUT md/{doc_id}.md
+    CW-->>WF: FinalizeResult (số ký tự)
+    WF->>DB: update_status(CONVERTED)
+    Note over WF: Chuyển sang giai đoạn 3: chunk, embedding, Vector DB
+      </div>
+    </div>
+
+    <!-- Tóm tắt -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="text-emerald-600 font-bold text-sm mb-1">📝 Chữ, heading, bảng</div>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          MarkItDown (mammoth) chuyển heading thành <code class="bg-slate-100 px-1 rounded">#</code>, <code class="bg-slate-100 px-1 rounded">##</code> và bảng Word thành bảng Markdown.
+        </p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="text-blue-600 font-bold text-sm mb-1">📊 Chart gốc của Word</div>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Đọc số liệu từ <code class="bg-slate-100 px-1 rounded">word/charts/chartN.xml</code> thành bảng, đặt đúng vị trí chart trong văn bản. Không cần OCR. Chart kiểu mới (<code class="bg-slate-100 px-1 rounded">cx:chart</code>: waterfall, treemap…) chưa hỗ trợ.
+        </p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="text-amber-600 font-bold text-sm mb-1">🖼️ Ảnh nhúng</div>
+        <p class="text-xs text-slate-600 leading-relaxed">
+          Ảnh đi OCR. Nếu là chart, sơ đồ hay bảng chụp, ảnh được gửi tiếp cho Vision LLM (chỉ khi đặt <code class="bg-slate-100 px-1 rounded">INGEST_VISION_MODEL</code>). Chữ đọc được chèn lại đúng chỗ ảnh.
+        </p>
+      </div>
+    </div>
+
+    <p class="text-xs text-slate-500 text-center">
+      Upload với <code class="bg-white px-1 rounded border">extract_media=false</code> thì chạy bản cũ: chỉ MarkItDown, không đọc ảnh và chart.
+    </p>
+
+  </div>
+</body>
+</html>

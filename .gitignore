@@ -1,0 +1,20 @@
+.env
+samples/out*/
+
+# Python, công cụ
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Hệ điều hành, file khoá của Office
+.DS_Store
+~$*
+
+# Repo người khác clone về để tham khảo, không đưa lên
+docs/temporal/temporal/
+docs/KashifAgha/rag-starter/
+docs/marketcalls/openrag/

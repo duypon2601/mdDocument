@@ -1,0 +1,40 @@
+@startuml
+title <size:24>System Context View: Document Ingestion System</size>\n<size:24>Level 1 - System Context</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+AddElementTag("Software System", $bgColor="#1168bd", $borderColor="#0b4884", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Person", $bgColor="#08427b", $borderColor="#052e56", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+Person(NgườidùngNghiệpvụ, "Người dùng / Nghiệp vụ", $descr="Tải tài liệu lên, theo dõi tiến độ, duyệt tài liệu OCR kém", $tags="Person", $link="")
+Person(Quảntrịviên, "Quản trị viên", $descr="Cấu hình pipeline, xem lịch sử job, retry hoặc huỷ job lỗi", $tags="Person", $link="")
+System(Nguồntàiliệu, "Nguồn tài liệu", $descr="File share, SharePoint, Google Drive, email… (tùy chọn, đồng bộ tự động)", $tags="Software System,External", $link="")
+System(EmbeddingModelProvider, "Embedding Model Provider", $descr="API hoặc model local tạo vector (OpenAI, Voyage, bge-m3…)", $tags="Software System,External", $link="")
+System(OCRVisionModel, "OCR / Vision Model", $descr="Đọc chữ từ ảnh và PDF scan (Tesseract, PaddleOCR hoặc VLM)", $tags="Software System,External", $link="")
+System(ỨngdụngRAGSearch, "Ứng dụng RAG / Search", $descr="Chatbot, trích xuất thông tin, tìm kiếm ngữ nghĩa", $tags="Software System,External", $link="")
+System(DocumentIngestionSystem, "Document Ingestion System", $descr="Nhận tài liệu, chuyển sang Markdown, chia chunk, tạo embedding và lưu vào Vector DB", $tags="Software System", $link="")
+
+Rel(NgườidùngNghiệpvụ, DocumentIngestionSystem, "Upload tài liệu, xem tiến độ, duyệt", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(Quảntrịviên, DocumentIngestionSystem, "Cấu hình, re-index, xử lý job lỗi", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(Nguồntàiliệu, DocumentIngestionSystem, "Đẩy / được kéo tài liệu mới", $techn="Webhook / API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem, OCRVisionModel, "Gửi trang ảnh cần OCR", $techn="HTTPS / local", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem, EmbeddingModelProvider, "Gửi chunk text, nhận vector", $techn="HTTPS / gRPC", $tags="Relationship", $link="")
+Rel(ỨngdụngRAGSearch, DocumentIngestionSystem, "Truy vấn vector + Markdown gốc", $techn="gRPC / HTTPS", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

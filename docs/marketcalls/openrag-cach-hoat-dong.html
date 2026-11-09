@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRAG hoạt động thế nào</title>
+<style>
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --text: #1d1d1b;
+  --muted: #5f5f5a;
+  --line: #deded8;
+  --accent: #2f6fdb;
+  --accent-soft: #e6eefc;
+  --ok: #1f8a54;
+  --ok-soft: #e3f4ea;
+  --warn: #b25e09;
+  --warn-soft: #fbefe0;
+  --bad: #c0392b;
+  --bad-soft: #fbe6e3;
+  --code: #f0f0ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615;
+    --surface: #1f1f1d;
+    --text: #ecece8;
+    --muted: #a3a39c;
+    --line: #34342f;
+    --accent: #7aa7f5;
+    --accent-soft: #1e2a40;
+    --ok: #5cc98d;
+    --ok-soft: #1a3226;
+    --warn: #f0a656;
+    --warn-soft: #3a2a17;
+    --bad: #f08174;
+    --bad-soft: #3d201c;
+    --code: #2a2a27;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --surface: #1f1f1d; --text: #ecece8; --muted: #a3a39c; --line: #34342f;
+  --accent: #7aa7f5; --accent-soft: #1e2a40; --ok: #5cc98d; --ok-soft: #1a3226;
+  --warn: #f0a656; --warn-soft: #3a2a17; --bad: #f08174; --bad-soft: #3d201c; --code: #2a2a27;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 2rem; line-height: 1.25; margin: 0 0 12px; }
+h2 { font-size: 1.4rem; margin: 56px 0 12px; }
+h3 { font-size: 1.05rem; margin: 0 0 6px; }
+p { margin: 0 0 14px; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+code { background: var(--code); padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+.muted { color: var(--muted); }
+
+/* Ảnh tổng quan */
+.overview {
+  display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: center;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0;
+}
+.ov-box { text-align: center; padding: 12px 8px; border-radius: 10px; background: var(--accent-soft); }
+.ov-box .big { font-size: 1.8rem; display: block; }
+.ov-box small { color: var(--muted); display: block; line-height: 1.4; }
+.ov-arrow { color: var(--muted); font-size: 1.4rem; }
+
+/* Tabs luồng */
+.tabs { display: flex; gap: 8px; margin: 18px 0 0; flex-wrap: wrap; }
+.tab {
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit; font-size: .95rem;
+}
+.tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.flow { display: none; margin-top: 18px; }
+.flow.active { display: block; }
+
+/* Các bước */
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.step {
+  position: relative; display: grid; grid-template-columns: 44px 1fr; gap: 14px;
+  padding: 0 0 22px;
+}
+.step::before {
+  counter-increment: s; content: counter(s);
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 600;
+  background: var(--surface); border: 2px solid var(--accent); color: var(--accent);
+  z-index: 1;
+}
+.step:not(:last-child)::after {
+  content: ""; position: absolute; left: 17px; top: 38px; bottom: 0; width: 2px; background: var(--line);
+}
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+}
+.card p:last-child { margin-bottom: 0; }
+.who { display: inline-block; font-size: .78rem; font-weight: 600; letter-spacing: .02em;
+  padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); margin-bottom: 6px; }
+.who.worker { background: var(--warn-soft); color: var(--warn); }
+.who.ai { background: var(--ok-soft); color: var(--ok); }
+.who.human { background: var(--code); color: var(--muted); }
+
+/* Trạng thái */
+.states { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; }
+.pill { padding: 6px 12px; border-radius: 999px; font-size: .9rem; border: 1px solid var(--line); background: var(--surface); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.pill.bad { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
+.pill.wait { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.sep { color: var(--muted); }
+
+/* Lưới thành phần */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+.grid .card h3 { display: flex; gap: 8px; align-items: center; }
+.tech { font-size: .85rem; color: var(--muted); }
+
+.note {
+  border-left: 4px solid var(--accent); background: var(--accent-soft);
+  padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0;
+}
+ul.plain { padding-left: 20px; margin: 0 0 14px; }
+ul.plain li { margin-bottom: 6px; }
+footer { margin-top: 64px; font-size: .88rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.6rem; }
+  .overview { grid-template-columns: 1fr; }
+  .ov-arrow { transform: rotate(90deg); text-align: center; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<h1>OpenRAG hoạt động thế nào</h1>
+<p class="lead">OpenRAG là hệ thống hỏi đáp trên tài liệu nội bộ của công ty. Bạn tải tài liệu lên, đặt câu hỏi bằng ngôn ngữ thường, và nhận câu trả lời có trích dẫn tới đúng file, đúng trang.</p>
+
+<div class="overview" aria-label="Tổng quan ba bước">
+  <div class="ov-box"><span class="big">1</span><b>Nạp tài liệu</b><small>Tải PDF, Word, Excel… lên workspace</small></div>
+  <div class="ov-arrow">→</div>
+  <div class="ov-box"><span class="big">2</span><b>Xử lý &amp; lập chỉ mục</b><small>Đọc chữ, chia chunk, tạo embedding</small></div>
+  <div class="ov-arrow">→</div>
+  <div class="ov-box"><span class="big">3</span><b>Hỏi đáp</b><small>Tìm đoạn liên quan, AI trả lời kèm trích dẫn</small></div>
+</div>
+
+<p>Có thể hình dung OpenRAG như một thủ thư. Khi nhận sách mới, thủ thư đọc qua, cắt thành từng mẩu nhỏ và ghi thẻ mục lục cho từng mẩu. Khi có người hỏi, thủ thư lục mục lục tìm vài mẩu sát nhất, đưa cho AI đọc, rồi AI viết câu trả lời và ghi rõ mẩu đó lấy từ sách nào, trang mấy. Nếu không tìm thấy gì đủ chắc, thủ thư nói là không biết.</p>
+
+<h2>Hai luồng chính</h2>
+<p class="muted">Bấm để chuyển giữa hai luồng.</p>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-target="ingest">① Nạp tài liệu</button>
+  <button class="tab" role="tab" aria-selected="false" data-target="query">② Đặt câu hỏi</button>
+</div>
+
+<section id="ingest" class="flow active" role="tabpanel">
+  <ol class="steps">
+    <li class="step"><div class="card">
+      <span class="who human">Người dùng</span>
+      <h3>Tải file lên</h3>
+      <p>Người dùng mở trang Documents trong một workspace và chọn file. Hỗ trợ PDF, DOCX, XLSX, PPTX, CSV, TXT, Markdown, HTML và ảnh.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who">API (FastAPI)</span>
+      <h3>Kiểm tra quyền và cất file</h3>
+      <p>API xem người này có quyền <code>document.upload</code> trong workspace không. File được kiểm tra đuôi, kiểu MIME và chữ ký file trước khi nhận. Bản gốc lưu vào MinIO, thông tin tài liệu ghi vào PostgreSQL, rồi API đẩy một job vào hàng đợi Redis nên người dùng không phải ngồi chờ.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who worker">Ingestion worker</span>
+      <h3>Đọc nội dung</h3>
+      <p>Worker chạy nền lấy job ra và dùng Docling để đọc file, giữ lại bố cục, tiêu đề mục, bảng và số trang. Với PDF scan, RapidOCR nhận dạng chữ từng trang ngay trên máy chủ, không gửi ra ngoài.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who worker">Ingestion worker</span>
+      <h3>Chia chunk và tạo embedding</h3>
+      <p>Văn bản được cắt thành các chunk vừa đủ ngắn. Mỗi chunk có hai dạng biểu diễn: vector dense theo nghĩa (TEI với BGE-M3) và vector sparse theo từ khoá (họ BM25). Hai dạng này giúp tìm được cả câu hỏi diễn đạt khác chữ lẫn câu hỏi chứa đúng mã số, tên riêng.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who worker">Ingestion worker</span>
+      <h3>Lưu vào Qdrant</h3>
+      <p>Các chunk được ghi vào Qdrant kèm mã tổ chức và mã workspace. Nhờ đó lúc tìm kiếm, hệ thống chỉ lọc trong phạm vi được phép.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who human">Người duyệt</span>
+      <h3>Duyệt tài liệu</h3>
+      <p>Tài liệu chuyển sang <b>Awaiting approval</b>. Người có quyền <code>document.approve</code> bấm Approve thì tài liệu mới thành <b>Indexed</b> và bắt đầu được dùng để trả lời. Tài liệu chưa duyệt không bao giờ xuất hiện trong câu trả lời.</p>
+    </div></li>
+  </ol>
+
+  <h3 style="margin-top:8px">Trạng thái tài liệu bạn sẽ thấy trên giao diện</h3>
+  <div class="states">
+    <span class="pill">Queued</span><span class="sep">→</span>
+    <span class="pill wait">Processing</span><span class="sep">→</span>
+    <span class="pill wait">Awaiting approval</span><span class="sep">→</span>
+    <span class="pill ok">Indexed</span>
+    <span class="sep">hoặc</span>
+    <span class="pill bad">Failed</span>
+  </div>
+  <p class="muted">Giao diện tự cập nhật trạng thái mà không phải tải lại trang.</p>
+</section>
+
+<section id="query" class="flow" role="tabpanel">
+  <ol class="steps">
+    <li class="step"><div class="card">
+      <span class="who human">Người dùng</span>
+      <h3>Gõ câu hỏi</h3>
+      <p>Ví dụ: “Mật danh nội bộ của dự án payroll là gì?”. Câu hỏi gắn với một workspace cụ thể.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who">API (FastAPI)</span>
+      <h3>Xác thực và nhận việc</h3>
+      <p>API đọc lại quyền của người dùng từ PostgreSQL ở mỗi request (cần <code>chat.use</code> và là thành viên workspace). Câu hỏi được lưu, rồi việc trả lời được giao cho run worker qua hàng đợi.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who worker">Run worker · Retrieval</span>
+      <h3>Tìm đoạn liên quan</h3>
+      <p>Câu hỏi cũng được biến thành vector. Qdrant tìm song song theo nghĩa và theo từ khoá, sau đó trộn hai danh sách kết quả lại. Bộ lọc tổ chức/workspace nằm ngay trong truy vấn, nên dữ liệu của workspace khác không bao giờ lọt vào.</p>
+      <p>Với câu hỏi khó (nhiều phần, so sánh nhiều tài liệu, bằng chứng yếu), Agno lên kế hoạch tìm thêm tối đa bốn lần bằng các công cụ chỉ đọc: lọc theo tên file, theo trang, tìm trong một tài liệu, lấy các chunk xung quanh…</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who ai">Mô hình AI (LiteLLM)</span>
+      <h3>Viết câu trả lời</h3>
+      <p>Các đoạn tìm được gửi tới mô hình mà workspace đã chọn (GPT, mô hình cục bộ qua Ollama, hoặc endpoint tương thích OpenAI) thông qua thư viện LiteLLM. Nội dung tài liệu được đánh dấu rõ là dữ liệu, không phải lệnh, để tránh bị chèn chỉ thị.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who worker">Kiểm tra trích dẫn</span>
+      <h3>Đối chiếu bằng chứng</h3>
+      <p>Trước khi trả kết quả, OpenRAG đối chiếu lại bằng chứng trong PostgreSQL. Câu trả lời phải dẫn được tên file, phiên bản, mục và trang. Thiếu bằng chứng hoặc các nguồn mâu thuẫn nhau thì hệ thống từ chối trả lời và nói lý do.</p>
+    </div></li>
+    <li class="step"><div class="card">
+      <span class="who">API → Trình duyệt</span>
+      <h3>Hiện chữ dần dần</h3>
+      <p>Câu trả lời được stream về trình duyệt qua SSE: chữ hiện ra từng phần, kèm các chip trích dẫn bấm được và số token đã dùng. Nếu người dùng hỏi “đưa vào bảng”, hệ thống có thể dựng thêm bảng hoặc biểu đồ, với điều kiện mọi con số đều trỏ về trích dẫn.</p>
+    </div></li>
+  </ol>
+
+  <div class="note">Khi nào AI nói “không biết”? Khi không có tài liệu đã duyệt, không tìm thấy đoạn nào đủ liên quan, nguồn mâu thuẫn, hoặc trích dẫn không khớp.</div>
+</section>
+
+<h2>Các thành phần và việc của từng cái</h2>
+<div class="grid">
+  <div class="card"><h3>Giao diện web</h3><p>Nơi người dùng tải file, chat và quản trị.</p><p class="tech">React, TypeScript, Vite, Tailwind</p></div>
+  <div class="card"><h3>API</h3><p>Cổng vào duy nhất. Kiểm tra đăng nhập, quyền, nhận yêu cầu.</p><p class="tech">FastAPI, Python</p></div>
+  <div class="card"><h3>Worker</h3><p>Làm việc nặng chạy nền: đọc file, tạo embedding, trả lời chat, chấm điểm chất lượng.</p><p class="tech">Celery + Redis</p></div>
+  <div class="card"><h3>PostgreSQL</h3><p>Sổ cái: người dùng, workspace, tài liệu, lịch sử chat, khoá API đã mã hoá, nhật ký audit.</p></div>
+  <div class="card"><h3>MinIO</h3><p>Kho chứa file gốc.</p><p class="tech">Tương thích S3</p></div>
+  <div class="card"><h3>Qdrant</h3><p>Mục lục tìm kiếm: lưu vector của từng chunk để tìm theo nghĩa và từ khoá.</p></div>
+  <div class="card"><h3>Docling + RapidOCR</h3><p>Đọc bố cục tài liệu và nhận dạng chữ trong bản scan, chạy cục bộ.</p></div>
+  <div class="card"><h3>TEI / BGE-M3</h3><p>Biến chữ thành vector embedding.</p></div>
+  <div class="card"><h3>Agno + LiteLLM</h3><p>Agno điều phối các bước tìm kiếm, LiteLLM gọi mô hình AI. Đổi nhà cung cấp mô hình không cần sửa code.</p></div>
+</div>
+
+<h2>Ai được xem gì</h2>
+<p>Quyền được tính theo hai câu hỏi tách riêng. Vai trò quyết định bạn được <em>làm gì</em>. Thành viên workspace quyết định bạn vào được <em>workspace nào</em>. Có quyền chat nhưng không là thành viên workspace thì vẫn không hỏi được tài liệu trong đó.</p>
+<ul class="plain">
+  <li>User chỉ chat và đọc tài liệu.</li>
+  <li>Engineer chat, đọc, và tải tài liệu lên.</li>
+  <li>HSE Manager làm được như Engineer, thêm quyền duyệt tài liệu.</li>
+  <li>Administrator quản lý toàn bộ tổ chức: người dùng, vai trò, mô hình, audit.</li>
+</ul>
+<p>Một vài nguyên tắc bảo mật khác: khoá API của nhà cung cấp mô hình chỉ ghi vào được, lưu dạng mã hoá và không bao giờ trả ngược ra giao diện. Token đăng nhập nằm trong bộ nhớ trình duyệt, refresh token để trong cookie HTTP-only. Mọi nội dung tài liệu và mọi câu AI viết ra đều được coi là dữ liệu không tin cậy.</p>
+
+<h2>Thử nhanh trên máy</h2>
+<p>Chỉ cần Docker. Trong thư mục <code>openrag</code>:</p>
+<p><code>cp .env.example .env</code> rồi <code>docker compose -f deploy/compose.yaml up -d --build</code>, mở <code>http://localhost:5173</code>.</p>
+<p>Sau đó thêm một mô hình ở mục Models, tạo workspace, tải <code>frontend/e2e/fixtures/sample.pdf</code>, duyệt nó, và hỏi “What is the internal launch codename?”. Câu trả lời đúng là <code>ZEBRA-COMET-7</code>, kèm trích dẫn trang.</p>
+<p class="muted">Chế độ embedding mặc định (<code>hash</code>) chỉ để kiểm tra cài đặt và không hiểu nghĩa. Muốn hỏi đáp thật, bật profile <code>ml</code> để dùng TEI với BGE-M3.</p>
+
+<footer>Tóm tắt từ <code>openrag/README.md</code>, <code>openrag/docs/architecture.md</code> và mã nguồn trong <code>openrag/backend</code>.</footer>
+</main>
+
+<script>
+document.querySelectorAll('.tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tab').forEach(function (b) { b.setAttribute('aria-selected', 'false'); });
+    document.querySelectorAll('.flow').forEach(function (f) { f.classList.remove('active'); });
+    btn.setAttribute('aria-selected', 'true');
+    document.getElementById(btn.dataset.target).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

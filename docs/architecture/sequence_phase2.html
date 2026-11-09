@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagram - Giai đoạn 2: Chuyển đổi định dạng & OCR</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mermaid.js CDN -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      sequence: {
+        actorMargin: 50,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 35,
+        mirrorActors: true,
+        useMaxWidth: true
+      }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-6xl mx-auto space-y-8">
+    
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            C4 Model • Level 2 Sequence Flow
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">
+            Giai đoạn 2: Điều phối & Chuyển đổi định dạng (Conversion Phase)
+          </h1>
+          <p class="text-slate-500 mt-1 text-sm sm:text-base">
+            Mô hình hóa chi tiết luồng xử lý: Nhận diện, Bóc tách song song (Fan-Out), Cơ chế Duyệt người (Human-in-the-loop) và Gộp Markdown (Fan-In).
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-mono font-medium">
+            Task Queue: convert-tq
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sequence Diagram Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 overflow-x-auto">
+      <h2 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Sơ đồ tuần tự tương tác (Sequence Diagram)
+      </h2>
+
+      <div class="mermaid flex justify-center">
+sequenceDiagram
+    autonumber
+    actor User as Người dùng / Admin
+    participant DB as Metadata DB (PostgreSQL)
+    participant WF as Indexing Worker: workflow (ingest-tq)
+    participant MinIO as Object Storage (MinIO)
+    participant CW as Conversion Worker (convert-tq)
+    participant OCR as OCR (Tesseract / RapidOCR)
+    participant VLM as Vision LLM (tùy chọn)
+
+    Note over WF, CW: Mũi tên giữa hai worker đi qua Temporal Server. update_status là activity trên ingest-tq, chạy ngay trong Indexing Worker
+    Note over WF: BẮT ĐẦU GIAI ĐOẠN 2
+    WF->>DB: update_status("CONVERTING")
+
+    %% Bước 1: Nhận diện định dạng
+    WF->>CW: execute_activity("detect_format", raw_key)
+    activate CW
+    CW->>MinIO: Đọc file gốc: raw/{doc_id}/{file}
+    CW->>CW: PDF: trang có text và trang scan, cộng hình nằm trên trang có text. Office: các ảnh nhúng
+    CW-->>WF: Trả về FormatInfo (số trang, các lô OCR 10 mục)
+    deactivate CW
+
+    %% Bước 2: Fan-Out Song Song
+    rect rgb(243, 244, 246)
+        Note over WF, VLM: FAN-OUT: BÓC TÁCH VĂN BẢN VÀ OCR CHẠY SONG SONG
+        par Nhánh 1: Bóc tách text số hóa
+            WF->>CW: execute_activity("parse_document")
+            activate CW
+            CW->>CW: PDF: pymupdf4llm từng trang có text. Office: parser riêng hoặc MarkItDown
+            CW->>MinIO: Lưu tệp thô: md-raw/{doc_id}/text.md
+            CW-->>WF: Trả về PartResult
+            deactivate CW
+        and Nhánh 2: OCR, mỗi lô là một activity, các lô chạy song song
+            WF->>CW: execute_activity("ocr_pages", batch)
+            loop Mỗi trang hoặc ảnh trong lô
+                CW-->>WF: Heartbeat {"page": i}
+                CW->>OCR: Đọc chữ trên ảnh trang
+                OCR-->>CW: text, confidence
+                opt Chart, sơ đồ, bảng chụp, tin cậy thấp hoặc sai dấu tiếng Việt
+                    CW->>VLM: Gửi ảnh đã thu nhỏ (gọi lại khi 429 hoặc 503)
+                    VLM-->>CW: Markdown, confidence tính là 1.0
+                end
+            end
+            CW->>MinIO: Lưu tệp OCR: md-raw/{doc_id}/ocr/{batch}.md
+            CW-->>WF: Trả về OcrResult (confidence trung bình của lô)
+        end
+    end
+
+    %% Bước 3: Human in the loop (Tùy chọn)
+    opt review_enabled = true và confidence thấp nhất dưới min_ocr_confidence
+        Note over WF, User: CHỜ NGƯỜI DUYỆT (tối đa review_timeout_days, mặc định 7 ngày)
+        WF->>DB: update_status("NEEDS_REVIEW")
+        User->>WF: ingest review hoặc POST /documents/{id}/review, API gửi signal review_decision ("approve" hoặc "reject")
+        alt reject hoặc hết hạn
+            WF->>DB: update_status("FAILED", error="OCR_REJECTED")
+            Note over WF: Workflow kết thúc ở trạng thái Failed
+        else approve
+            Note over WF: Tiếp tục luồng xử lý
+        end
+    end
+
+    %% Bước 4: Fan-In Gộp Markdown
+    Note over WF, CW: FAN-IN: GỘP & CHUẨN HÓA MARKDOWN
+    WF->>CW: execute_activity("finalize_markdown")
+    activate CW
+    CW->>MinIO: Tải md-raw/{doc_id}/text.md và các file ocr/*.md
+    CW->>CW: Chèn nội dung ảnh vào chỗ marker, sắp theo số trang, bỏ header/footer lặp lại
+    CW->>CW: Gắn Front-matter (tiêu đề, doc_id, số trang)
+    CW->>MinIO: Ghi tệp Markdown thống nhất: md/{doc_id}.md
+    CW-->>WF: Trả về FinalizeResult (char_count > 0, bằng 0 thì lỗi EMPTY_DOCUMENT)
+    deactivate CW
+
+    %% Hoàn tất giai đoạn 2
+    WF->>DB: update_status("CONVERTED")
+    Note over WF: HOÀN TẤT GIAI ĐOẠN 2 ➔ BƯỚC SANG GIAI ĐOẠN 3 (INDEXING)
+
+    Note over DB, WF: Activity lỗi hết lượt retry hoặc lỗi non_retryable thì ghi FAILED kèm mã lỗi. Người dùng huỷ thì ghi CANCELLED
+      </div>
+    </div>
+
+    <!-- Chi tiết kỹ thuật từng bước -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      
+      <!-- Card 1: Detect & Fan-Out -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">1</span>
+          <h3>Nhận diện & Bóc tách song song (Fan-Out)</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">detect_format:</strong> Phân loại trang nào có text số hóa, trang nào là ảnh scan cần OCR. Hình nằm trên trang có text và ảnh nhúng trong Office cũng được đưa vào lô OCR.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">parse_document:</strong> Bóc tách trực tiếp phần text số hóa, ghi ra storage key: <code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs">md-raw/{doc_id}/text.md</code>.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">ocr_pages:</strong> Mỗi lô 10 trang là một activity. Mặc định dùng Tesseract (đọc đúng dấu tiếng Việt), máy không có Tesseract thì dùng RapidOCR. Mỗi trang gửi một <strong>Heartbeat</strong> về Temporal để không bị timeout.</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Card 2: Human In The Loop & Fan-In -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">2</span>
+          <h3>Kiểm duyệt người & Gộp chuẩn hóa (Fan-In)</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">Human-in-the-loop:</strong> Mặc định tắt (<code class="bg-slate-100 px-1 rounded text-xs">review_enabled=false</code>). Khi bật và OCR kém (confidence dưới <code class="bg-slate-100 px-1 rounded text-xs">min_ocr_confidence</code>, mặc định 0.6), workflow chuyển trạng thái <code class="bg-amber-50 text-amber-700 px-1 py-0.5 rounded text-xs">NEEDS_REVIEW</code> chờ tín hiệu Signal tối đa 7 ngày.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">finalize_markdown:</strong> Đọc lại các phần nháp từ MinIO, chèn nội dung ảnh về đúng chỗ, ghép theo thứ tự trang, bỏ header/footer lặp lại và gắn front-matter.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-slate-400">•</span>
+            <span><strong class="text-slate-800">Đích đến:</strong> Tạo ra tệp Markdown hoàn chỉnh duy nhất tại: <code class="bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded text-xs">md/{doc_id}.md</code>. Cập nhật <code class="bg-slate-100 px-1 rounded text-xs">CONVERTED</code>.</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center text-xs text-slate-400 py-4">
+      Document Ingestion System • Generated for Technical Presentation & Architectural Review
+    </footer>
+
+  </div>
+</body>
+</html>

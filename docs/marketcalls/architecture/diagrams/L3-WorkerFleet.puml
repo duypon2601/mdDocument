@@ -1,0 +1,66 @@
+@startuml
+title <size:24>Component View: OpenRAG Platform - Celery Worker Fleet</size>\n<size:24>Level 3 - Component: Celery Worker Fleet</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System_Boundary("OpenRAGPlatform_boundary", "OpenRAG Platform", $tags="Software System") {
+  Container_Boundary("OpenRAGPlatform.CeleryWorkerFleet_boundary", "Celery Worker Fleet", $tags="Container") {
+    Component(OpenRAGPlatform.CeleryWorkerFleet.CeleryTaskRunner, "Celery Task Runner", $techn="Celery Task Runner", $descr="Tiếp nhận và điều phối tác vụ từ các hàng đợi chuyên biệt (ingestion, runs, models, evaluations...)", $tags="Component", $link="")
+    Component(OpenRAGPlatform.CeleryWorkerFleet.DocumentParserOCRPipeline, "Document Parser & OCR Pipeline", $techn="Docling, RapidOCR, pypdfium2", $descr="Trích xuất văn bản bằng Docling, chạy RapidOCR cho trang scan/ảnh, fallback pypdfium2 cho PDF dung lượng lớn", $tags="Component", $link="")
+    Component(OpenRAGPlatform.CeleryWorkerFleet.SemanticChunkingEngine, "Semantic Chunking Engine", $techn="Python Semantic Splitter", $descr="Cắt nhỏ Markdown bảo toàn cấu trúc tiêu đề, bảo vệ khối bảng biểu, gắn nhãn EvidenceSpan và tính mã băm SHA-256", $tags="Component", $link="")
+    Component(OpenRAGPlatform.CeleryWorkerFleet.EmbeddingIndexingClient, "Embedding & Indexing Client", $techn="tei-client, Qdrant Python Client", $descr="Gọi TEI hoặc LiteLLM sinh vector, đẩy điểm vector kèm metadata chi tiết vào Qdrant", $tags="Component", $link="")
+    Component(OpenRAGPlatform.CeleryWorkerFleet.ModelCapabilityTester, "Model Capability Tester", $techn="LiteLLM Async Probe", $descr="Kiểm tra thực tế các khả năng sinh văn bản, stream, gọi hàm và sinh JSON của mô hình mới đăng ký", $tags="Component", $link="")
+    Component(OpenRAGPlatform.CeleryWorkerFleet.EvaluationBenchmarkEngine, "Evaluation & Benchmark Engine", $techn="Python Evaluation Suite", $descr="Chạy bộ đánh giá tự động dựa trên golden dataset, so sánh Simple RAG với Agentic RAG và xuất báo cáo đo lường", $tags="Component", $link="")
+  }
+
+  ContainerDb(OpenRAGPlatform.RelationalDatabase, "Relational Database", $techn="PostgreSQL 16 Alpine", $descr="Lưu trữ metadata tài liệu, tổ chức, workspace, tài khoản người dùng, bảng phân quyền RBAC, phiên chat, bằng chứng trích dẫn và khóa mã hóa", $tags="Container,Database", $link="")
+  ContainerDb(OpenRAGPlatform.MessageBrokerCache, "Message Broker & Cache", $techn="Redis 7 Alpine", $descr="Hàng đợi tác vụ Celery (default, interactive, ingestion, models...), cache phiên và bộ đếm giới hạn tốc độ", $tags="Container,Database", $link="")
+  ContainerDb(OpenRAGPlatform.ObjectStorage, "Object Storage", $techn="MinIO (S3 compatible)", $descr="Lưu trữ tài liệu gốc, vùng cách ly kiểm duyệt file (quarantine), và dữ liệu xuất báo cáo", $tags="Container,Database", $link="")
+  ContainerDb(OpenRAGPlatform.VectorDatabase, "Vector Database", $techn="Qdrant Vector DB", $descr="Lưu trữ vector dense và sparse BM25, hỗ trợ tìm kiếm kết hợp (hybrid search) với bộ lọc cứng cô lập tenant theo org_id và workspace_id", $tags="Container,Database", $link="")
+  Container(OpenRAGPlatform.TextEmbeddingsInferenceTEI, "Text Embeddings Inference (TEI)", $techn="HuggingFace TEI / Docker", $descr="Container HuggingFace TEI phục vụ sinh vector nhúng cục bộ tốc độ cao cho mô hình BGE-M3 / hash", $tags="Container", $link="")
+  Container(OpenRAGPlatform.BackendAPIService, "Backend API Service", $techn="Python 3.12, FastAPI, SQLAlchemy (asyncpg), LiteLLM, Agno", $descr="Cung cấp REST & SSE API, xác thực JWT/MFA, phân quyền RBAC, điều phối Agentic RAG qua Agno, kiểm dịch upload và điều hướng sự kiện", $tags="Container", $link="")
+}
+
+Rel(OpenRAGPlatform.CeleryWorkerFleet.EvaluationBenchmarkEngine, OpenRAGPlatform.BackendAPIService, "Truy xuất đối chiếu Simple RAG vs Agentic RAG", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.EvaluationBenchmarkEngine, OpenRAGPlatform.RelationalDatabase, "Lưu kết quả đo lường và so sánh", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.RelationalDatabase, "Đọc/ghi metadata, users, workspaces, sessions, bằng chứng và outbox", $techn="asyncpg / TCP 5432", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.MessageBrokerCache, "Đẩy tác vụ vào hàng đợi Celery, kiểm tra rate limit", $techn="Redis Protocol / TCP 6379", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.ObjectStorage, "Lưu file vào vùng cách ly (quarantine), tải file đã duyệt", $techn="S3 API / HTTP 9000", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.VectorDatabase, "Truy vấn hybrid search (dense + BM25) với bộ lọc tenant cứng", $techn="HTTP / REST 6333", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.TextEmbeddingsInferenceTEI, "Sinh vector embedding câu truy vấn tức thì", $techn="HTTP 80", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.MessageBrokerCache, OpenRAGPlatform.CeleryWorkerFleet.CeleryTaskRunner, "Phân phối tác vụ Celery", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.CeleryTaskRunner, OpenRAGPlatform.CeleryWorkerFleet.DocumentParserOCRPipeline, "Thực thi trích xuất tài liệu (Docling / RapidOCR)", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.DocumentParserOCRPipeline, OpenRAGPlatform.ObjectStorage, "Đọc file gốc từ quarantine", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.DocumentParserOCRPipeline, OpenRAGPlatform.CeleryWorkerFleet.SemanticChunkingEngine, "Chuyển giao các PageBlock đã trích xuất", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.SemanticChunkingEngine, OpenRAGPlatform.CeleryWorkerFleet.EmbeddingIndexingClient, "Chuyển giao danh sách chunk kèm EvidenceSpan", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.EmbeddingIndexingClient, OpenRAGPlatform.TextEmbeddingsInferenceTEI, "Sinh batch embedding", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.EmbeddingIndexingClient, OpenRAGPlatform.VectorDatabase, "Upsert points vào collection Qdrant", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.EmbeddingIndexingClient, OpenRAGPlatform.RelationalDatabase, "Ghi nhận chunk metadata và đổi trạng thái tài liệu sang INDEXED", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.CeleryTaskRunner, OpenRAGPlatform.CeleryWorkerFleet.ModelCapabilityTester, "Thực thi tác vụ probe kiểm tra mô hình", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.ModelCapabilityTester, OpenRAGPlatform.BackendAPIService, "Gọi LiteLLM thăm dò năng lực", $techn="", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.CeleryWorkerFleet.CeleryTaskRunner, OpenRAGPlatform.CeleryWorkerFleet.EvaluationBenchmarkEngine, "Thực thi tác vụ benchmark golden dataset", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

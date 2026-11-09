@@ -1,0 +1,69 @@
+@startuml
+title <size:24>Component View: Document Ingestion System - Indexing Worker</size>\n<size:24>Level 3 - Component: Indexing Worker (workflow + index)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Temporal", $bgColor="#5b3fa0", $borderColor="#3f2c70", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System(EmbeddingModelProvider, "Embedding Model Provider", $descr="API hoặc model local tạo vector (OpenAI, Voyage, bge-m3…)", $tags="Software System,External", $link="")
+
+System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System", $tags="Software System") {
+  Container_Boundary("DocumentIngestionSystem.IndexingWorker_boundary", "Indexing Worker", $tags="Container") {
+    Component(DocumentIngestionSystem.IndexingWorker.Workeringesttq, "Worker (ingest-tq)", $techn="temporalio.worker", $descr="Đăng ký hai workflow và activity update_status. Không bị rate limit của index-tq", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.DocumentIngestionWorkflow, "DocumentIngestionWorkflow", $techn="@workflow.defn", $descr="detect → parse / OCR → finalize → chunk → embed + upsert → cleanup. Query get_progress, signal review_decision", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, "ReindexWorkflow", $techn="@workflow.defn", $descr="Bỏ qua bước convert: chunk → embed + upsert → cleanup với model hoặc cách chunk mới", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.update_status, "update_status", $techn="@activity.defn, SQLAlchemy", $descr="Ghi trạng thái, số chunk, mã lỗi vào Metadata DB. Ghi lại cùng giá trị không sao", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.Workerindextq, "Worker (index-tq)", $techn="temporalio.worker", $descr="Đăng ký activity index, giới hạn số activity mỗi giây theo rate limit embedding", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.chunk_markdown, "chunk_markdown", $techn="@activity.defn, MarkdownHeaderTextSplitter", $descr="Cắt theo heading rồi theo token (512, overlap 64), gắn metadata, ghi chunks/{doc_id}/v{n}/batch-{i}.jsonl, trả số lô", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.embed_and_upsert, "embed_and_upsert", $techn="@activity.defn, httpx, qdrant-client", $descr="Một lô: đọc JSONL, gọi embed, upsert với id = uuid5(doc_id, version, chunk_index). Vector không đi qua Temporal", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IndexingWorker.cleanup_old_chunks, "cleanup_old_chunks", $techn="@activity.defn, qdrant-client", $descr="Xóa point của doc_id thuộc index_version cũ", $tags="Component", $link="")
+  }
+
+  Container(DocumentIngestionSystem.TemporalServer, "Temporal Server", $techn="Temporal (self-hosted, PostgreSQL riêng) hoặc Temporal Cloud", $descr="Lưu lịch sử từng bước của workflow, quản lý task queue, timer, retry; kèm Temporal Web UI", $tags="Container,Temporal", $link="")
+  ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
+  ContainerDb(DocumentIngestionSystem.MetadataDB, "Metadata DB", $techn="PostgreSQL", $descr="Danh mục tài liệu, trạng thái nghiệp vụ, hash, index_version", $tags="Container,Database", $link="")
+  ContainerDb(DocumentIngestionSystem.VectorDB, "Vector DB", $techn="Qdrant (hoặc pgvector, Milvus)", $descr="Vector + payload: text chunk, doc_id, heading, trang, index_version", $tags="Container,Database", $link="")
+}
+
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.embed_and_upsert, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.cleanup_old_chunks, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.chunk_markdown, DocumentIngestionSystem.ObjectStorage, "GET md, PUT chunks", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.embed_and_upsert, DocumentIngestionSystem.ObjectStorage, "GET chunk batch", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.embed_and_upsert, EmbeddingModelProvider, "Batch embed", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.embed_and_upsert, DocumentIngestionSystem.VectorDB, "Upsert", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.cleanup_old_chunks, DocumentIngestionSystem.VectorDB, "Delete theo doc_id + version cũ", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workeringesttq, DocumentIngestionSystem.TemporalServer, "Long-poll ingest-tq", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workeringesttq, DocumentIngestionSystem.IndexingWorker.DocumentIngestionWorkflow, "Chạy / replay", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workeringesttq, DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, "Chạy / replay", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workeringesttq, DocumentIngestionSystem.IndexingWorker.update_status, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.DocumentIngestionWorkflow, DocumentIngestionSystem.TemporalServer, "Đặt lịch activity trên convert-tq, index-tq; chờ signal", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, DocumentIngestionSystem.TemporalServer, "Đặt lịch activity trên index-tq", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.DocumentIngestionWorkflow, DocumentIngestionSystem.IndexingWorker.update_status, "execute_activity", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, DocumentIngestionSystem.IndexingWorker.update_status, "execute_activity", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.update_status, DocumentIngestionSystem.MetadataDB, "UPDATE status", $techn="SQL", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.TemporalServer, "Long-poll index-tq, trả kết quả", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.chunk_markdown, "Chạy", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

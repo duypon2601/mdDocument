@@ -1,0 +1,51 @@
+@startuml
+title <size:24>Dynamic View: OpenRAG Platform</size>\n<size:24>Luồng hỏi đáp Agentic RAG, xác minh bằng chứng và sinh biểu đồ</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+AddElementTag("Person", $bgColor="#08427b", $borderColor="#052e56", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,WebBrowser", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Software System", $bgColor="#ffffff", $borderColor="#0b4884", $fontColor="#0b4884", $shadowing="", $borderStyle="solid")
+
+System_Boundary("OpenRAGPlatform_boundary", "OpenRAG Platform", $tags="Software System") {
+  ContainerDb(OpenRAGPlatform.RelationalDatabase, "Relational Database", $techn="PostgreSQL 16 Alpine", $descr="Lưu trữ metadata tài liệu, tổ chức, workspace, tài khoản người dùng, bảng phân quyền RBAC, phiên chat, bằng chứng trích dẫn và khóa mã hóa", $tags="Container,Database", $link="")
+  ContainerDb(OpenRAGPlatform.VectorDatabase, "Vector Database", $techn="Qdrant Vector DB", $descr="Lưu trữ vector dense và sparse BM25, hỗ trợ tìm kiếm kết hợp (hybrid search) với bộ lọc cứng cô lập tenant theo org_id và workspace_id", $tags="Container,Database", $link="")
+  Container(OpenRAGPlatform.WebApplication, "Web Application", $techn="React 18, TypeScript, Tailwind CSS, Vite, Nginx", $descr="Giao diện người dùng: chat trực tiếp qua SSE, hiển thị trích dẫn bằng chứng, quản lý duyệt tài liệu và trực quan hóa bảng biểu phân tích", $tags="Container,WebBrowser", $link="")
+  Container(OpenRAGPlatform.BackendAPIService, "Backend API Service", $techn="Python 3.12, FastAPI, SQLAlchemy (asyncpg), LiteLLM, Agno", $descr="Cung cấp REST & SSE API, xác thực JWT/MFA, phân quyền RBAC, điều phối Agentic RAG qua Agno, kiểm dịch upload và điều hướng sự kiện", $tags="Container", $link="")
+}
+
+Person(Ngườidùng, "Người dùng", $descr="Đăng nhập tài khoản, quản lý tài liệu trong workspace, tra cứu tri thức qua chat, nhận câu trả lời có trích dẫn nguồn và biểu đồ phân tích", $tags="Person", $link="")
+System(LLMVLMProvider, "LLM / VLM Provider", $descr="Cung cấp mô hình ngôn ngữ lớn (OpenAI GPT-5.6, Azure OpenAI, Anthropic, Bedrock, vLLM, Ollama) qua thư viện LiteLLM nhúng trong tiến trình", $tags="Software System,External", $link="")
+
+Rel(Ngườidùng, OpenRAGPlatform.WebApplication, "1: 1. Đặt câu hỏi trong workspace", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.WebApplication, OpenRAGPlatform.BackendAPIService, "2: 2. Mở kết nối SSE (POST /api/chats/ask)", $techn="JSON / SSE over HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, LLMVLMProvider, "3: 3. Agno lập kế hoạch truy vấn qua LiteLLM", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.VectorDatabase, "4: 4. Tìm kiếm hybrid (dense + sparse) với bộ lọc tenant cứng", $techn="HTTP / REST 6333", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.RelationalDatabase, "5: 5. Đối chiếu bằng chứng EvidenceSpan và số trang", $techn="asyncpg / TCP 5432", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, LLMVLMProvider, "6: 6. Sinh câu trả lời bám sát ngữ cảnh kèm trích dẫn", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.WebApplication, "7: 7. Stream token câu trả lời và trích dẫn về giao diện", $techn="JSON / SSE over HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, LLMVLMProvider, "8: 8. Gọi bổ sung structured output sinh analytics.v1 (nếu cần)", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.WebApplication, "9: 9. Gửi biểu đồ Vega-Lite / bảng dữ liệu an toàn", $techn="JSON / SSE over HTTPS", $tags="Relationship", $link="")
+Rel(OpenRAGPlatform.BackendAPIService, OpenRAGPlatform.RelationalDatabase, "10: 10. Lưu phiên chat và tin nhắn", $techn="asyncpg / TCP 5432", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

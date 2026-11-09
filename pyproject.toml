@@ -1,0 +1,53 @@
+[project]
+name = "ingest-workspace"
+version = "0.1.0"
+description = "Document Ingestion System (Temporal). Root workspace: cài đủ các package để dev và chạy test"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "ingest-core",
+  "ingest-api",
+  "ingest-convert",
+  "ingest-index",
+  "ingest-cli",
+]
+
+[project.optional-dependencies]
+docling = ["ingest-convert[docling]"]
+ocr = ["ingest-convert[ocr]"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+ingest-core = { workspace = true }
+ingest-api = { workspace = true }
+ingest-convert = { workspace = true }
+ingest-index = { workspace = true }
+ingest-cli = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "python-docx",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["packages/*/src", "tests"]
+extend-exclude = ["docs", ".claude"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+testpaths = ["tests"]

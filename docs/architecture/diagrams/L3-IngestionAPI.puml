@@ -1,0 +1,61 @@
+@startuml
+title <size:24>Component View: Document Ingestion System - Ingestion API</size>\n<size:24>Level 3 - Component: Ingestion API</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Temporal", $bgColor="#5b3fa0", $borderColor="#3f2c70", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,WebBrowser", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System", $tags="Software System") {
+  Container_Boundary("DocumentIngestionSystem.IngestionAPI_boundary", "Ingestion API", $tags="Container") {
+    Component(DocumentIngestionSystem.IngestionAPI.UploadController, "Upload Controller", $techn="FastAPI router", $descr="POST /documents (multipart), POST /documents/batch", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.StatusController, "Status Controller", $techn="FastAPI router", $descr="GET /documents/{id}, POST /documents/{id}/review, /reindex, /cancel", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.FileValidator, "File Validator", $techn="python-magic", $descr="Kiểm tra MIME thật, dung lượng, định dạng hỗ trợ", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.DedupService, "Dedup Service", $techn="hashlib", $descr="Tính SHA-256, doc_id sinh từ hash nên file trùng không tạo job mới", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.StorageClient, "Storage Client", $techn="boto3 / minio", $descr="Ghi file gốc vào raw/{doc_id}/", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.DocumentRepository, "Document Repository", $techn="SQLAlchemy", $descr="CRUD document, trạng thái nghiệp vụ, danh sách tài liệu", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.IngestionAPI.WorkflowClient, "Workflow Client", $techn="temporalio.client", $descr="start_workflow(id=ingest-{doc_id}), query get_progress, signal review_decision, cancel", $tags="Component", $link="")
+  }
+
+  Container(DocumentIngestionSystem.TemporalServer, "Temporal Server", $techn="Temporal (self-hosted, PostgreSQL riêng) hoặc Temporal Cloud", $descr="Lưu lịch sử từng bước của workflow, quản lý task queue, timer, retry; kèm Temporal Web UI", $tags="Container,Temporal", $link="")
+  ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
+  ContainerDb(DocumentIngestionSystem.MetadataDB, "Metadata DB", $techn="PostgreSQL", $descr="Danh mục tài liệu, trạng thái nghiệp vụ, hash, index_version", $tags="Container,Database", $link="")
+  Container(DocumentIngestionSystem.WebUICLI, "Web UI / CLI", $techn="React hoặc Typer CLI", $descr="Upload, xem tiến độ, duyệt tài liệu, bấm re-index", $tags="Container,WebBrowser", $link="")
+}
+
+Rel(DocumentIngestionSystem.WebUICLI, DocumentIngestionSystem.IngestionAPI.UploadController, "Upload file", $techn="REST", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.WebUICLI, DocumentIngestionSystem.IngestionAPI.StatusController, "Xem tiến độ, duyệt, re-index, huỷ", $techn="REST", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.UploadController, DocumentIngestionSystem.IngestionAPI.FileValidator, "Validate", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.UploadController, DocumentIngestionSystem.IngestionAPI.DedupService, "Tính doc_id", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.DedupService, DocumentIngestionSystem.IngestionAPI.DocumentRepository, "Tra hash", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.UploadController, DocumentIngestionSystem.IngestionAPI.StorageClient, "Lưu file", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.UploadController, DocumentIngestionSystem.IngestionAPI.DocumentRepository, "Tạo document", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.UploadController, DocumentIngestionSystem.IngestionAPI.WorkflowClient, "Khởi động ingestion", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.StatusController, DocumentIngestionSystem.IngestionAPI.DocumentRepository, "Đọc trạng thái", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.StatusController, DocumentIngestionSystem.IngestionAPI.WorkflowClient, "Query tiến độ, signal duyệt, cancel, start reindex", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.StorageClient, DocumentIngestionSystem.ObjectStorage, "PUT raw", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.DocumentRepository, DocumentIngestionSystem.MetadataDB, "Đọc / ghi", $techn="SQL", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IngestionAPI.WorkflowClient, DocumentIngestionSystem.TemporalServer, "start_workflow, query, signal, cancel", $techn="gRPC", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

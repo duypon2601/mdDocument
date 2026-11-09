@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nạp tài liệu</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d2433; --muted: #667085; --line: #e4e7ec;
+    --accent: #2563eb; --accent-soft: #eff4ff;
+    --ok: #067647; --ok-bg: #ecfdf3; --run: #b54708; --run-bg: #fffaeb;
+    --bad: #b42318; --bad-bg: #fef3f2; --code: #f2f4f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --panel: #171a21; --text: #e6e8ec; --muted: #98a2b3; --line: #2a2f3a;
+      --accent: #6b9bff; --accent-soft: #1b2540;
+      --ok: #47cd89; --ok-bg: #0f2a1d; --run: #fdb022; --run-bg: #2d2210;
+      --bad: #f97066; --bad-bg: #2f1513; --code: #1f232c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  .panel h2 { font-size: 15px; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+  .modes button { text-align: left; padding: 8px 10px; }
+  .modes button small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .modes button.on small { color: #fff; opacity: .85; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line);
+         color: var(--muted); margin-left: 6px; white-space: nowrap; }
+  .tag.old { border-style: dashed; }
+  #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 28px 16px; text-align: center;
+          cursor: pointer; color: var(--muted); transition: .15s; margin-bottom: 16px; }
+  #drop.over, #drop:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+  #drop strong { color: var(--accent); }
+  #msgs:empty { display: none; }
+  #msgs { margin-bottom: 12px; font-size: 13px; }
+  #msgs div { padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; }
+  .m-ok { background: var(--ok-bg); color: var(--ok); }
+  .m-bad { background: var(--bad-bg); color: var(--bad); }
+  input[type=search] { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+          background: var(--bg); color: var(--text); font: inherit; margin-bottom: 8px; }
+  ul#docs { list-style: none; margin: 0; padding: 0; }
+  ul#docs li { padding: 10px; border-radius: 8px; cursor: pointer; display: flex; gap: 10px;
+          align-items: center; border: 1px solid transparent; }
+  ul#docs li:hover { background: var(--bg); }
+  ul#docs li.sel { border-color: var(--accent); background: var(--accent-soft); }
+  .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .pill { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .s-ok { background: var(--ok-bg); color: var(--ok); }
+  .s-run { background: var(--run-bg); color: var(--run); }
+  .s-bad { background: var(--bad-bg); color: var(--bad); }
+  .empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+  button { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line);
+           background: var(--panel); color: var(--text); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  #info { font-size: 13px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+  #info b { color: var(--text); font-weight: 600; }
+  #view { border-top: 1px solid var(--line); padding-top: 12px; overflow-x: auto; }
+  #view pre.raw { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; background: var(--code);
+          padding: 12px; border-radius: 8px; margin: 0; }
+  .md table { border-collapse: collapse; margin: 8px 0 16px; font-size: 13px; }
+  .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  .md th { background: var(--code); }
+  .md code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 12.5px; }
+  .md h2 { font-size: 17px; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 24px; }
+  .md h3 { font-size: 15px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Nạp tài liệu</h1>
+  <p class="sub">PDF, Word, PowerPoint, Excel, HTML, ảnh. Tải file lên rồi xem Markdown trích ra.</p>
+  <div class="grid">
+    <section class="panel">
+      <div class="modes" id="modes" role="radiogroup" aria-label="Chế độ xử lý">
+        <button data-profile="v2" role="radio">Mới v2<small>Sau chỉnh sửa: bắt sai dấu, gọi lại khi lỗi</small></button>
+        <button data-profile="v1" role="radio">Mới v1<small>Trước chỉnh sửa</small></button>
+        <button data-profile="legacy" role="radio">Bản cũ<small>Không bóc ảnh, chart</small></button>
+      </div>
+      <div id="drop" tabindex="0">
+        <strong>Chọn file</strong> hoặc kéo thả vào đây
+        <div class="meta">Chọn được nhiều file cùng lúc</div>
+      </div>
+      <input id="file" type="file" multiple hidden>
+      <div id="msgs"></div>
+      <h2>Tài liệu <button id="refresh" title="Tải lại danh sách">Tải lại</button></h2>
+      <input id="q" type="search" placeholder="Tìm theo tên file">
+      <ul id="docs"><li class="empty">Đang tải…</li></ul>
+    </section>
+    <section class="panel">
+      <h2><span id="title">Chọn một tài liệu</span>
+        <span class="actions" id="actions"></span></h2>
+      <div id="info"></div>
+      <div id="view"><p class="empty">Markdown sẽ hiện ở đây sau khi tài liệu xử lý xong.</p></div>
+    </section>
+  </div>
+</main>
+<script>
+const RUNNING = new Set(["RECEIVED", "CONVERTING", "NEEDS_REVIEW", "CONVERTED", "INDEXING"]);
+const LABEL = {
+  RECEIVED: "Đã nhận", CONVERTING: "Đang chuyển đổi", NEEDS_REVIEW: "Chờ duyệt OCR",
+  CONVERTED: "Đã chuyển đổi", INDEXING: "Đang index", INDEXED: "Hoàn tất",
+  FAILED: "Lỗi", CANCELLED: "Đã huỷ",
+};
+const $ = (id) => document.getElementById(id);
+let docs = [], selected = null, mdText = null, timer = null;
+const PROFILES = { v2: "mới v2", v1: "mới v1", legacy: "bản cũ" };
+let profile = "v2";
+try { profile = PROFILES[localStorage.getItem("profile")] ? localStorage.getItem("profile") : "v2"; } catch (e) {}
+const profileOf = (d) => d.profile || (d.extract_media === false ? "legacy" : "v2");
+const tag = (d) => {
+  const p = profileOf(d);
+  return `<span class="tag ${p === "legacy" ? "old" : ""}" title="Kiểu xử lý lúc upload">${PROFILES[p]}</span>`;
+};
+
+function showMode() {
+  document.querySelectorAll("#modes button").forEach((b) => {
+    const on = b.dataset.profile === profile;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+  });
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pillClass = (s) => s === "INDEXED" ? "s-ok" : (s === "FAILED" || s === "CANCELLED") ? "s-bad" : "s-run";
+const pill = (s) => `<span class="pill ${pillClass(s)}">${esc(LABEL[s] || s)}</span>`;
+// API trả giờ UTC không kèm múi giờ; thêm "Z" để trình duyệt đổi sang giờ máy
+const when = (iso) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z").toLocaleString("vi-VN");
+const size = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const isJson = (r.headers.get("content-type") || "").includes("json");
+  const body = isJson ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((isJson && (body.detail || body.code)) || body || r.statusText);
+  return body;
+}
+
+function note(text, ok) {
+  const d = document.createElement("div");
+  d.className = ok ? "m-ok" : "m-bad";
+  d.textContent = text;
+  $("msgs").prepend(d);
+  setTimeout(() => d.remove(), 8000);
+}
+
+async function upload(files) {
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append("file", f);
+    fd.append("extract_media", profile === "legacy" ? "false" : "true");
+    fd.append("pipeline_version", profile === "v1" ? "1" : "2");
+    try {
+      const res = await api("/documents", { method: "POST", body: fd });
+      const m = PROFILES[profile];
+      note(res.duplicate ? `${f.name} (${m}): đã có, dùng lại kết quả` : `${f.name} (${m}): đã nhận, đang xử lý`, true);
+      selected = res.doc_id;
+    } catch (e) {
+      note(`${f.name}: ${e.message}`, false);
+    }
+  }
+  await loadList();
+  if (selected) await select(selected);
+}
+
+async function loadList() {
+  const q = $("q").value.trim();
+  try {
+    const res = await api(`/documents?limit=100${q ? "&q=" + encodeURIComponent(q) : ""}`);
+    docs = res.items;
+  } catch (e) {
+    $("docs").innerHTML = `<li class="empty">Không tải được danh sách: ${esc(e.message)}</li>`;
+    return schedule();
+  }
+  $("docs").innerHTML = docs.length ? docs.map((d) => `
+    <li data-id="${esc(d.doc_id)}" class="${d.doc_id === selected ? "sel" : ""}">
+      <div class="name">${esc(d.file_name)}${tag(d)}<div class="meta">${size(d.size)} · ${when(d.updated_at)}</div></div>
+      ${pill(d.status)}
+    </li>`).join("") : `<li class="empty">Chưa có tài liệu nào</li>`;
+  schedule();
+}
+
+function schedule() {
+  clearTimeout(timer);
+  const busy = docs.some((d) => RUNNING.has(d.status));
+  timer = setTimeout(async () => {
+    await loadList();
+    if (selected) await select(selected, true);
+  }, busy ? 2000 : 15000);
+}
+
+async function select(id, quiet) {
+  const changed = id !== selected;
+  selected = id;
+  document.querySelectorAll("#docs li").forEach((li) => li.classList.toggle("sel", li.dataset.id === id));
+  let d;
+  try { d = await api(`/documents/${id}`); } catch (e) { return; }
+  $("title").innerHTML = esc(d.file_name) + tag(d);
+  const parts = [pill(d.status), `<b>${size(d.size)}</b>`];
+  if (d.progress && d.progress !== d.status) parts.push(`bước: <b>${esc(LABEL[d.progress] || d.progress)}</b>`);
+  if (d.chunk_count) parts.push(`<b>${d.chunk_count}</b> chunk`);
+  if (d.error_code) parts.push(`mã lỗi: <b>${esc(d.error_code)}</b>`);
+  parts.push(`id: ${esc(d.doc_id.slice(0, 12))}…`);
+  $("info").innerHTML = parts.join(" · ");
+
+  const acts = [];
+  if (d.status === "NEEDS_REVIEW") acts.push(`<button data-act="approve">Duyệt</button><button data-act="reject">Từ chối</button>`);
+  if (RUNNING.has(d.status)) acts.push(`<button data-act="cancel">Huỷ</button>`);
+  $("actions").innerHTML = acts.join("");
+
+  if (changed || !quiet || mdText === null) {
+    try { mdText = await api(`/documents/${id}/markdown`); }
+    catch (e) { mdText = null; }
+    render(d.status);
+  }
+}
+
+function render(status) {
+  if (mdText === null) {
+    const msg = RUNNING.has(status) ? "Đang xử lý, Markdown sẽ hiện khi chuyển đổi xong…"
+      : status === "FAILED" ? "Xử lý lỗi, không có Markdown." : "Chưa có Markdown.";
+    $("view").innerHTML = `<p class="empty">${msg}</p>`;
+    return;
+  }
+  const body = mdText.replace(/^---\n[\s\S]*?\n---\n/, "");  // bỏ front-matter khi xem
+  if (!window.marked || !window.DOMPurify) {  // CDN không tải được: hiện Markdown gốc
+    $("view").innerHTML = `<pre class="raw">${esc(mdText)}</pre>`;
+  } else {
+    $("view").innerHTML = `<div class="md">${DOMPurify.sanitize(marked.parse(body))}</div>`;
+  }
+}
+
+$("modes").onclick = (e) => {
+  const b = e.target.closest("button[data-profile]");
+  if (!b) return;
+  profile = b.dataset.profile;
+  try { localStorage.setItem("profile", profile); } catch (err) {}
+  showMode();
+};
+showMode();
+$("drop").onclick = () => $("file").click();
+$("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("file").click(); };
+$("file").onchange = (e) => { upload([...e.target.files]); e.target.value = ""; };
+["dragenter", "dragover"].forEach((t) => $("drop").addEventListener(t, (e) => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => $("drop").addEventListener(t, (e) => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", (e) => upload([...e.dataTransfer.files]));
+$("refresh").onclick = loadList;
+let qTimer;
+$("q").oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadList, 300); };
+$("docs").onclick = (e) => { const li = e.target.closest("li[data-id]"); if (li) select(li.dataset.id); };
+$("actions").onclick = async (e) => {
+  const b = e.target.closest("button");
+  if (!b || !selected) return;
+  const act = b.dataset.act;
+  const path = act === "approve" || act === "reject"
+    ? `/documents/${selected}/review?decision=${act}` : `/documents/${selected}/${act}`;
+  try { await api(path, { method: "POST" }); note(`Đã gửi: ${b.textContent}`, true); }
+  catch (err) { note(err.message, false); }
+  await loadList();
+  await select(selected);
+};
+
+loadList();
+</script>
+</body>
+</html>

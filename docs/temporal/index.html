@@ -1,0 +1,1757 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Temporal hoạt động thế nào — Giải thích trực quan luồng hoạt động</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Lora:ital,wght@0,600;0,700;1,400&display=swap">
+<style>
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-subtle: #f0f2f5;
+  --border: #dbe0e6;
+  --border-subtle: #e9ecef;
+  --text: #19212c;
+  --muted: #5e6d7e;
+  --accent: #1e56a0;
+  --accent-soft: #eaf1fb;
+  --accent-hover: #16437e;
+  
+  --client: #6f42c1;
+  --client-soft: #f3eefb;
+  --server: #0c7792;
+  --server-soft: #e6f6fa;
+  --queue: #d97706;
+  --queue-soft: #fef5e7;
+  --workflow: #1e56a0;
+  --workflow-soft: #eaf1fb;
+  --activity: #059669;
+  --activity-soft: #e6f7f0;
+  
+  --ok: #059669;
+  --ok-soft: #e6f7f0;
+  --warn: #b45309;
+  --warn-soft: #fef3c7;
+  --bad: #dc2626;
+  --bad-soft: #fee2e2;
+
+  --code-bg: #1f2937;
+  --code-fg: #f3f4f6;
+
+  --font-display: "Lora", Georgia, serif;
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f141c;
+  --surface: #18202c;
+  --surface-subtle: #1f2a3a;
+  --border: #283547;
+  --border-subtle: #212c3b;
+  --text: #e6edf5;
+  --muted: #94a3b8;
+  --accent: #5c9df5;
+  --accent-soft: #172c4a;
+  --accent-hover: #7db1f7;
+  
+  --client: #b388ff;
+  --client-soft: #301f4a;
+  --server: #38bdf8;
+  --server-soft: #133345;
+  --queue: #fbbf24;
+  --queue-soft: #422f12;
+  --workflow: #60a5fa;
+  --workflow-soft: #162f52;
+  --activity: #34d399;
+  --activity-soft: #0e3d2c;
+  
+  --ok: #34d399;
+  --ok-soft: #0e3d2c;
+  --warn: #fbbf24;
+  --warn-soft: #422f12;
+  --bad: #f87171;
+  --bad-soft: #451a1a;
+
+  --code-bg: #121822;
+  --code-fg: #f3f4f6;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141c;
+    --surface: #18202c;
+    --surface-subtle: #1f2a3a;
+    --border: #283547;
+    --border-subtle: #212c3b;
+    --text: #e6edf5;
+    --muted: #94a3b8;
+    --accent: #5c9df5;
+    --accent-soft: #172c4a;
+    --accent-hover: #7db1f7;
+    
+    --client: #b388ff;
+    --client-soft: #301f4a;
+    --server: #38bdf8;
+    --server-soft: #133345;
+    --queue: #fbbf24;
+    --queue-soft: #422f12;
+    --workflow: #60a5fa;
+    --workflow-soft: #162f52;
+    --activity: #34d399;
+    --activity-soft: #0e3d2c;
+    
+    --ok: #34d399;
+    --ok-soft: #0e3d2c;
+    --warn: #fbbf24;
+    --warn-soft: #422f12;
+    --bad: #f87171;
+    --bad-soft: #451a1a;
+
+    --code-bg: #121822;
+    --code-fg: #f3f4f6;
+
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.65;
+  padding: 32px 16px 80px;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  display: grid;
+  gap: 48px;
+}
+
+/* Header & Theme switcher */
+header {
+  display: grid;
+  gap: 16px;
+  position: relative;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.theme-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.theme-toggle:hover {
+  background: var(--surface-subtle);
+  border-color: var(--accent);
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4.5vw, 2.7rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.lead {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* Card styles */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* Analogy Box */
+.analogy-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+}
+
+.analogy-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.analogy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.analogy-item {
+  background: var(--surface-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.analogy-item b {
+  font-size: 0.95rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analogy-item span {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Architecture visual */
+.arch-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.arch-canvas {
+  width: 100%;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.arch-svg {
+  min-width: 680px;
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Five Core Concepts */
+.concepts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.concept-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.concept-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.concept-card .tag {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.tag-client { background: var(--client-soft); color: var(--client); }
+.tag-server { background: var(--server-soft); color: var(--server); }
+.tag-queue { background: var(--queue-soft); color: var(--queue); }
+.tag-workflow { background: var(--workflow-soft); color: var(--workflow); }
+.tag-activity { background: var(--activity-soft); color: var(--activity); }
+
+.concept-card h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.concept-card p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Flow Section */
+.flow-section {
+  display: grid;
+  gap: 20px;
+}
+
+.flow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--border-subtle);
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -4px;
+  padding: 10px 16px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+}
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Actor chips bar */
+.actors-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.actors-label {
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  opacity: 0.45;
+  transition: all 0.25s ease;
+}
+
+.chip.active {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.chip[data-actor="client"].active {
+  background: var(--client-soft);
+  color: var(--client);
+  border-color: var(--client);
+}
+.chip[data-actor="server"].active {
+  background: var(--server-soft);
+  color: var(--server);
+  border-color: var(--server);
+}
+.chip[data-actor="queue"].active {
+  background: var(--queue-soft);
+  color: var(--queue);
+  border-color: var(--queue);
+}
+.chip[data-actor="workflow"].active {
+  background: var(--workflow-soft);
+  color: var(--workflow);
+  border-color: var(--workflow);
+}
+.chip[data-actor="activity"].active {
+  background: var(--activity-soft);
+  color: var(--activity);
+  border-color: var(--activity);
+}
+
+/* Player controls */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-ctrl {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+}
+.btn-ctrl:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Steps list */
+.flow-content {
+  display: none;
+}
+.flow-content.active {
+  display: grid;
+  gap: 16px;
+}
+
+.steps-list {
+  display: grid;
+  gap: 14px;
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.step-card:hover {
+  border-color: var(--accent);
+}
+
+.step-card.active {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(30, 86, 160, 0.08);
+}
+
+.step-num {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-family: var(--font-mono);
+  transition: all 0.2s;
+}
+
+.step-card.active .step-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.step-body {
+  display: grid;
+  gap: 6px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.step-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.step-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.step-desc {
+  font-size: 0.92rem;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.step-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 4px;
+  font-family: var(--font-body);
+}
+
+.step-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--server);
+  margin-top: 4px;
+}
+.step-event code {
+  background: var(--server-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Crash recovery special highlight */
+.recovery-banner {
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: grid;
+  gap: 8px;
+}
+.recovery-banner b {
+  color: var(--warn);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recovery-banner p {
+  font-size: 0.92rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* Three Golden Rules */
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 16px;
+}
+
+.rule-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.rule-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.rule-box h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.rule-box p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.rule-dos-donts {
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.rule-item.do {
+  color: var(--ok);
+}
+.rule-item.dont {
+  color: var(--bad);
+}
+
+/* Code Snippet Box */
+.code-section {
+  display: grid;
+  gap: 14px;
+}
+
+.code-container {
+  background: var(--code-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.code-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.code-tab-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.code-tab-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+pre {
+  margin: 0;
+  padding: 20px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--code-fg);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+}
+
+pre code {
+  padding: 0;
+  background: transparent;
+}
+
+/* Syntax highlight simulation */
+.kw { color: #f472b6; font-weight: 500; }
+.fn { color: #60a5fa; }
+.str { color: #a7f3d0; }
+.cm { color: #6b7280; font-style: italic; }
+.typ { color: #fbbf24; }
+
+/* Comparison Table */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  text-align: left;
+}
+
+th, td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+
+th {
+  background: var(--surface-subtle);
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* FAQ */
+.faq-grid {
+  display: grid;
+  gap: 12px;
+}
+
+details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  transition: border-color 0.2s;
+}
+
+details[open] {
+  border-color: var(--accent);
+}
+
+summary {
+  font-weight: 600;
+  font-size: 0.98rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary::after {
+  content: "+";
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+details[open] summary::after {
+  content: "−";
+}
+
+details p {
+  margin-top: 12px;
+  font-size: 0.92rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  font-size: 0.88rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  body { padding: 20px 12px 60px; }
+  .container { gap: 36px; }
+  .step-card { grid-template-columns: 1fr; }
+  .step-num { display: inline-flex; width: 28px; height: 28px; }
+  .actors-bar { position: static; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="top-bar">
+      <div class="badge">Kiến trúc & Vận hành</div>
+      <button class="theme-toggle" id="themeToggle" aria-label="Đổi giao diện">
+        <span id="themeIcon">🌙</span> <span id="themeText">Chế độ tối</span>
+      </button>
+    </div>
+    <h1>Temporal hoạt động thế nào?</h1>
+    <p class="lead">Một góc nhìn trực quan, súc tích về cách Temporal giữ cho các luồng xử lý dữ liệu nhiều bước chạy trơn tru, không lo mất mát khi máy chủ gặp sự cố.</p>
+  </header>
+
+  <!-- Ví von đời thường -->
+  <section class="analogy-box">
+    <div class="analogy-title">
+      <span>💡</span> <b>Hình dung Temporal như một văn phòng quản lý dự án</b>
+    </div>
+    <div class="analogy-grid">
+      <div class="analogy-item">
+        <b><span>🧑‍💼</span> Khách hàng (Client)</b>
+        <span>Gửi phiếu yêu cầu một công việc (ví dụ: bóc tách file PDF, tạo đơn hàng).</span>
+      </div>
+      <div class="analogy-item">
+        <b><span>📖</span> Thư ký & Sổ cái (Temporal Server)</b>
+        <span>Đánh số ID, ghi từng bước vào cuốn sổ nhật ký không thể xoá, rồi thả phiếu vào hộp thư.</span>
+      </div>
+      <div class="analogy-item">
+        <b><span>📬</span> Hộp thư nhận việc (Task Queue)</b>
+        <span>Nơi chứa việc chờ xử lý. Nhân viên rảnh sẽ tự tới rút việc về làm.</span>
+      </div>
+      <div class="analogy-item">
+        <b><span>📋</span> Quản đốc điều phối (Workflow)</b>
+        <span>Cầm bản quy trình chỉ đạo: "Làm bước 1 trước, nếu xong thì làm bước 2". Không trực tiếp bốc vác hay gọi điện thoại.</span>
+      </div>
+      <div class="analogy-item">
+        <b><span>🔨</span> Nhân viên thực thi (Activity)</b>
+        <span>Tự tay làm việc cụ thể: bóc tách văn bản, gọi AI, ghi dữ liệu vào database.</span>
+      </div>
+      <div class="analogy-item">
+        <b><span>🛡️</span> Cúp điện giữa chừng?</b>
+        <span>Nhân viên mới mở sổ nhật ký ra xem. Bước nào xong rồi thì không làm lại, làm tiếp ngay bước đang dở.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sơ đồ kiến trúc tương tác trực quan -->
+  <section class="arch-diagram">
+    <div>
+      <h2 style="font-size:1.25rem; margin-bottom:4px">Mô hình kiến trúc tổng thể</h2>
+      <p style="font-size:0.9rem; color:var(--muted)">Sự tách biệt rõ ràng giữa Client, Server trung tâm và các Worker.</p>
+    </div>
+    
+    <div class="arch-canvas">
+      <svg class="arch-svg" viewBox="0 0 760 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--muted)"/>
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- CLIENT BOX -->
+        <rect x="15" y="60" width="120" height="90" rx="10" fill="var(--client-soft)" stroke="var(--client)" stroke-width="1.5"/>
+        <text x="75" y="95" fill="var(--client)" font-size="13" font-weight="700" text-anchor="middle" font-family="var(--font-mono)">CLIENT</text>
+        <text x="75" y="115" fill="var(--text)" font-size="11" text-anchor="middle" font-family="var(--font-body)">FastAPI / App</text>
+        <text x="75" y="130" fill="var(--muted)" font-size="10" text-anchor="middle" font-family="var(--font-body)">start / query / cancel</text>
+
+        <!-- Arrow Client -> Server -->
+        <path d="M 135 95 L 200 95" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#arrow)"/>
+        <text x="168" y="87" fill="var(--muted)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">gRPC</text>
+
+        <!-- Arrow Server -> Client (Result) -->
+        <path d="M 200 115 L 135 115" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrow-accent)"/>
+        <text x="168" y="130" fill="var(--accent)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">result</text>
+
+        <!-- TEMPORAL SERVER CLUSTER -->
+        <rect x="205" y="25" width="220" height="160" rx="12" fill="var(--server-soft)" stroke="var(--server)" stroke-width="1.5"/>
+        <text x="315" y="52" fill="var(--server)" font-size="14" font-weight="700" text-anchor="middle" font-family="var(--font-mono)">TEMPORAL SERVER</text>
+        
+        <!-- Inside Server: Event History & DB -->
+        <rect x="225" y="65" width="180" height="42" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+        <text x="315" y="84" fill="var(--text)" font-size="11" font-weight="600" text-anchor="middle">Sổ cái Event History</text>
+        <text x="315" y="98" fill="var(--muted)" font-size="9" text-anchor="middle">Lưu trong DB (Postgres/Cassandra)</text>
+
+        <!-- Inside Server: Task Queues -->
+        <rect x="225" y="117" width="180" height="50" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+        <text x="315" y="136" fill="var(--queue)" font-size="11" font-weight="600" text-anchor="middle">Task Queues</text>
+        <text x="315" y="152" fill="var(--muted)" font-size="9" text-anchor="middle">ingest-tq · convert-tq · index-tq</text>
+
+        <!-- Arrow Server <-> Worker -->
+        <path d="M 425 90 L 510 90" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="468" y="82" fill="var(--muted)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">pull task</text>
+
+        <path d="M 510 135 L 425 135" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="468" y="150" fill="var(--muted)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">báo kết quả</text>
+
+        <!-- WORKER CLUSTER -->
+        <rect x="515" y="25" width="230" height="160" rx="12" fill="var(--workflow-soft)" stroke="var(--workflow)" stroke-width="1.5"/>
+        <text x="630" y="52" fill="var(--workflow)" font-size="14" font-weight="700" text-anchor="middle" font-family="var(--font-mono)">WORKER POOL</text>
+
+        <!-- Workflow Box -->
+        <rect x="530" y="65" width="200" height="42" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+        <text x="630" y="84" fill="var(--workflow)" font-size="11" font-weight="600" text-anchor="middle">Workflow Execution</text>
+        <text x="630" y="98" fill="var(--muted)" font-size="9" text-anchor="middle">Điều phối thứ tự (Deterministic)</text>
+
+        <!-- Activity Box -->
+        <rect x="530" y="117" width="200" height="50" rx="6" fill="var(--surface)" stroke="var(--border)" stroke-width="1"/>
+        <text x="630" y="136" fill="var(--activity)" font-size="11" font-weight="600" text-anchor="middle">Activity Execution</text>
+        <text x="630" y="152" fill="var(--muted)" font-size="9" text-anchor="middle">I/O · Gọi LLM · OCR · DB · Storage</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Năm khái niệm cốt lõi -->
+  <section>
+    <div style="margin-bottom:16px">
+      <h2>5 Thành phần tạo nên hệ thống</h2>
+      <p class="lead">Nắm vững 5 khái niệm này là đủ hiểu cách vận hành của mọi hệ thống dùng Temporal.</p>
+    </div>
+    
+    <div class="concepts-grid">
+      <div class="concept-card">
+        <span class="tag tag-client">Client</span>
+        <h3>Client</h3>
+        <p>Phần mềm của bạn (ví dụ FastAPI hoặc CLI). Client kết nối với Temporal Server để khởi động job mới, tra cứu tiến độ hoặc yêu cầu huỷ.</p>
+      </div>
+
+      <div class="concept-card">
+        <span class="tag tag-server">Temporal Server</span>
+        <h3>Temporal Server</h3>
+        <p>Hệ thống máy chủ lưu trữ toàn bộ lịch sử (Event History), duy trì hàng đợi (Task Queue), quản lý Timer chờ đợi và tự động kích hoạt retry.</p>
+      </div>
+
+      <div class="concept-card">
+        <span class="tag tag-queue">Task Queue</span>
+        <h3>Task Queue</h3>
+        <p>Hàng đợi định danh (ví dụ <code>convert-tq</code>). Server đẩy việc vào đây, Worker định kỳ thăm dò (long-polling) để kéo việc về làm.</p>
+      </div>
+
+      <div class="concept-card">
+        <span class="tag tag-workflow">Workflow</span>
+        <h3>Workflow (Điều phối)</h3>
+        <p>Đoạn code định nghĩa quy trình: bước nào trước, bước nào sau, timeout bao lâu. Tuyệt đối không làm I/O hay gọi mạng trong này.</p>
+      </div>
+
+      <div class="concept-card">
+        <span class="tag tag-activity">Activity</span>
+        <h3>Activity (Thực thi)</h3>
+        <p>Nơi làm công việc thực tế: gọi API bên ngoài, bóc tách tài liệu Docling/OCR, ghi dữ liệu vào cơ sở dữ liệu hoặc kho lưu trữ S3/MinIO.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Flows -->
+  <section class="flow-section" id="interactive-flows">
+    <div class="flow-header">
+      <div>
+        <h2>Xem luồng hoạt động từng bước</h2>
+        <p class="lead">Bấm vào từng bước hoặc dùng nút chạy tự động để quan sát các thành phần tương tác.</p>
+      </div>
+    </div>
+
+    <!-- Tabs chọn luồng -->
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-flow="happy" role="tab" aria-selected="true">
+        <span>①</span> Vòng đời một Job chuẩn
+      </button>
+      <button class="tab-btn" data-flow="crash" role="tab" aria-selected="false">
+        <span>②</span> Worker sập & Tự phục hồi (Replay)
+      </button>
+      <button class="tab-btn" data-flow="signal" role="tab" aria-selected="false">
+        <span>③</span> Chờ duyệt (Signal) & Retry tự động
+      </button>
+    </div>
+
+    <!-- Thanh trạng thái các Actor tham gia (Sticky) -->
+    <div class="actors-bar">
+      <div class="chips-group">
+        <span class="actors-label">Đang tác động:</span>
+        <span class="chip" data-actor="client">Client</span>
+        <span class="chip" data-actor="server">Temporal Server</span>
+        <span class="chip" data-actor="queue">Task Queue</span>
+        <span class="chip" data-actor="workflow">Workflow</span>
+        <span class="chip" data-actor="activity">Activity</span>
+      </div>
+
+      <div class="player-controls">
+        <button class="btn-ctrl" id="btnPrev" title="Bước trước">◀ Trước</button>
+        <button class="btn-ctrl btn-primary" id="btnPlay">▶ Tự động chạy</button>
+        <button class="btn-ctrl" id="btnNext" title="Bước tiếp theo">Tiếp ▶</button>
+      </div>
+    </div>
+
+    <!-- FLOW 1: Happy Path -->
+    <div class="flow-content active" id="flow-happy">
+      <div class="steps-list">
+
+        <div class="step-card active" data-actors="client server">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Client gửi yêu cầu bắt đầu Workflow</span>
+              <div class="step-tags">
+                <span class="tag tag-client">Client</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Khách hàng hoặc API gọi <code>client.start_workflow()</code> với tên Workflow, dữ liệu đầu vào (Input Payload) và ID duy nhất (ví dụ <code>ingest-doc-123</code>).</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>WorkflowExecutionStarted</code></div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="server queue">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Server xếp việc vào Task Queue</span>
+              <div class="step-tags">
+                <span class="tag tag-server">Server</span>
+                <span class="tag tag-queue">Task Queue</span>
+              </div>
+            </div>
+            <p class="step-desc">Temporal Server ghi nhận job vào Event History và đẩy một <b>Workflow Task</b> vào Task Queue định sẵn (ví dụ: <code>ingest-tq</code>) để chờ Worker nhận.</p>
+            <div class="step-note">Hàng đợi này tách biệt hoàn toàn giữa người giao việc và người làm việc, giúp hệ thống không bị nghẽn tải.</div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="queue workflow">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Worker nhận Task và khởi chạy Workflow</span>
+              <div class="step-tags">
+                <span class="tag tag-queue">Task Queue</span>
+                <span class="tag tag-workflow">Workflow</span>
+              </div>
+            </div>
+            <p class="step-desc">Worker đang long-polling trên hàng đợi sẽ kéo Workflow Task về và chạy hàm <code>run()</code> của Workflow trong bộ nhớ.</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>WorkflowTaskStarted</code></div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="workflow server queue">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Workflow ra lệnh gọi Activity</span>
+              <div class="step-tags">
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-server">Server</span>
+                <span class="tag tag-queue">Task Queue</span>
+              </div>
+            </div>
+            <p class="step-desc">Trong hàm run, code gặp lệnh <code>workflow.execute_activity("convert_document", ...)</code>. Workflow không tự thực thi mà thông báo lại cho Server: "Hãy lên lịch chạy Activity này cho tôi".</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>ActivityTaskScheduled</code></div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="queue activity">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Worker thực hiện Activity (Làm việc thực tế)</span>
+              <div class="step-tags">
+                <span class="tag tag-queue">Task Queue</span>
+                <span class="tag tag-activity">Activity</span>
+              </div>
+            </div>
+            <p class="step-desc">Một Worker lắng nghe queue đó (có thể là máy chủ khác có GPU/CPU chuyên dụng) nhận task về và bắt đầu thực hiện: đọc file PDF, chạy OCR, gọi LLM, tính toán nặng.</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>ActivityTaskStarted</code></div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="activity server">
+          <div class="step-num">6</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Activity hoàn thành và trả kết quả về Server</span>
+              <div class="step-tags">
+                <span class="tag tag-activity">Activity</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Hàm Activity kết thúc thành công và gửi kết quả về Server. Server lưu ngay kết quả này vào sổ cái Event History.</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>ActivityTaskCompleted</code> (kèm output)</div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="server workflow client">
+          <div class="step-num">7</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Workflow hoàn tất và Client nhận kết quả</span>
+              <div class="step-tags">
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-server">Server</span>
+                <span class="tag tag-client">Client</span>
+              </div>
+            </div>
+            <p class="step-desc">Server kích hoạt lại Workflow để đi tiếp các bước tiếp theo hoặc kết thúc nếu đã xong tất cả. Khi Workflow trả về giá trị cuối cùng, Client lấy được dữ liệu qua <code>handle.result()</code>.</p>
+            <div class="step-event">Sự kiện ghi vào lịch sử: <code>WorkflowExecutionCompleted</code></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FLOW 2: Crash & Replay -->
+    <div class="flow-content" id="flow-crash">
+      <div class="recovery-banner">
+        <b><span>⚡</span> Sức mạnh cốt lõi: Khả năng sống sót khi máy chủ gặp sự cố (Durable Execution)</b>
+        <p>Trong hệ thống thông thường, nếu máy chủ chết giữa chừng, toàn bộ bộ nhớ RAM biến mất, job bị huỷ hoặc phải chạy lại từ đầu. Với Temporal, nhật ký được lưu tại Server độc lập, cho phép worker mới tua lại lịch sử (Replay) và tiếp tục như chưa hề có sự cố.</p>
+      </div>
+
+      <div class="steps-list" style="margin-top:14px">
+
+        <div class="step-card active" data-actors="workflow activity">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Bước 1 (Parse PDF) đã xong, đang chạy Bước 2 (Gọi LLM)</span>
+              <div class="step-tags">
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-activity">Activity</span>
+              </div>
+            </div>
+            <p class="step-desc">Bước Parse tài liệu đã xong và kết quả đã nằm an toàn trong Event History trên Server. Worker đang tiến hành bước 2 thì máy chủ đột ngột sập nguồn hoặc hết RAM (OOM Killer).</p>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="server">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Server phát hiện Worker đã ngừng hoạt động</span>
+              <div class="step-tags">
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Do Worker không gửi tín hiệu Heartbeat hoặc quá thời gian <code>start_to_close_timeout</code>, Server nhận ra Worker cũ đã chết và đưa task trở lại Task Queue để tìm Worker khác.</p>
+            <div class="step-event">Sự kiện: <code>ActivityTaskTimedOut</code> hoặc phân bổ lại task</div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="queue workflow server">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Worker mới tiếp nhận và thực hiện "Replay"</span>
+              <div class="step-tags">
+                <span class="tag tag-queue">Task Queue</span>
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Một Worker khác trong cụm kéo Workflow Task về và chạy lại mã từ đầu. <b>Điều kỳ diệu nằm ở đây:</b> khi đến dòng lệnh gọi bước 1, SDK thấy trong Event History đã có kết quả <code>ActivityTaskCompleted</code>, nên lập tức trả về kết quả cũ mà <b>không chạy lại bước 1 thật</b>!</p>
+            <div class="step-note">Không tốn tiền gọi lại API đắt đỏ, không mất thời gian xử lý lại dữ liệu cũ, không tạo ra side effect lặp.</div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="workflow activity server">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Chạy tiếp bước 2 còn dở dang</span>
+              <div class="step-tags">
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-activity">Activity</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Sau khi tua qua bước 1 trong tích tắc, Workflow chạm tới bước 2 và kích hoạt Activity thực hiện lại. Quy trình tiếp tục trôi chảy cho tới khi hoàn tất.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FLOW 3: Signals, Queries, Retries -->
+    <div class="flow-content" id="flow-signal">
+      <div class="steps-list">
+
+        <div class="step-card active" data-actors="activity server">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Activity gặp lỗi mạng tạm thời (429 Rate Limit / 503)</span>
+              <div class="step-tags">
+                <span class="tag tag-activity">Activity</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Khi gọi API bên ngoài bị nghẽn mạng, Activity raise Exception bình thường. Server bắt được lỗi và tự động áp dụng <code>RetryPolicy</code> (thử lại sau 2s, 4s, 8s...). Trong thời gian chờ này, Worker được giải phóng làm việc khác.</p>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="client workflow">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Client tra cứu trạng thái tức thì (Query)</span>
+              <div class="step-tags">
+                <span class="tag tag-client">Client</span>
+                <span class="tag tag-workflow">Workflow</span>
+              </div>
+            </div>
+            <p class="step-desc">Bất cứ lúc nào trong khi job đang chạy, người dùng hoặc Web frontend có thể gọi <code>handle.query("get_progress")</code> để lấy % tiến độ hoặc trạng thái nội bộ mà không làm gián đoạn workflow.</p>
+            <div class="step-note">Query là thao tác chỉ đọc (Read-only), không được phép thay đổi trạng thái của Workflow.</div>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="workflow server">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Workflow tạm dừng chờ người duyệt (Durable Wait)</span>
+              <div class="step-tags">
+                <span class="tag tag-workflow">Workflow</span>
+                <span class="tag tag-server">Server</span>
+              </div>
+            </div>
+            <p class="step-desc">Quy trình yêu cầu có người duyệt trước khi nạp dữ liệu. Workflow gọi lệnh chờ: <code>await workflow.wait_condition(...)</code>. Trạng thái được đông kết, tài nguyên RAM CPU được giải phóng hoàn toàn. Việc chờ đợi có thể kéo dài vài giờ, vài ngày hoặc vài tháng.</p>
+          </div>
+        </div>
+
+        <div class="step-card" data-actors="client server workflow">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-header">
+              <span class="step-title">Quản trị viên bấm Duyệt -> Gửi Signal đánh thức</span>
+              <div class="step-tags">
+                <span class="tag tag-client">Client</span>
+                <span class="tag tag-server">Server</span>
+                <span class="tag tag-workflow">Workflow</span>
+              </div>
+            </div>
+            <p class="step-desc">Người duyệt bấm Approve trên web dashboard. Client gọi <code>handle.signal("review_decision", approved=True)</code>. Server nhận tín hiệu, ghi sự kiện <code>WorkflowExecutionSignaled</code> và lập tức đánh thức Workflow tiếp tục chạy.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 Luật vàng -->
+  <section>
+    <div style="margin-bottom:16px">
+      <h2>3 Nguyên tắc vàng khi viết code</h2>
+      <p class="lead">Để tận dụng trọn vẹn khả năng phục hồi của Temporal mà không bao giờ gặp lỗi ngớ ngẩn.</p>
+    </div>
+
+    <div class="rules-grid">
+      <div class="rule-box">
+        <div class="rule-num">1</div>
+        <h3>Workflow phải Deterministic</h3>
+        <p>Khi replay, code workflow sẽ chạy lại từ dòng 1 và phải tạo ra đúng chuỗi lệnh như lần chạy trước. Nếu kết quả rẽ nhánh khác đi, hệ thống sẽ báo lỗi Non-Determinism.</p>
+        <div class="rule-dos-donts">
+          <div class="rule-item dont">❌ Không gọi <code>datetime.now()</code>, <code>random()</code>, <code>uuid4()</code></div>
+          <div class="rule-item dont">❌ Không gọi API, không đọc ghi file trên đĩa trong Workflow</div>
+          <div class="rule-item do">✅ Dùng <code>workflow.now()</code>, <code>workflow.uuid4()</code></div>
+          <div class="rule-item do">✅ Toàn bộ I/O chuyển hết vào Activity</div>
+        </div>
+      </div>
+
+      <div class="rule-box">
+        <div class="rule-num">2</div>
+        <h3>Activity phải Idempotent</h3>
+        <p>Activity có thể bị chạy lại nhiều lần do mạng chập chờn hoặc retry. Chạy lại cùng một tham số đầu vào phải luôn cho ra cùng kết quả và không gây tác dụng phụ lặp.</p>
+        <div class="rule-dos-donts">
+          <div class="rule-item dont">❌ Không sinh tên file bằng timestamp ngẫu nhiên khi ghi đĩa</div>
+          <div class="rule-item dont">❌ Không thực hiện trừ tiền mà thiếu khoá chống trùng (idempotency key)</div>
+          <div class="rule-item do">✅ Tên file và ID tài nguyên sinh trực tiếp từ mã đơn hàng / input</div>
+          <div class="rule-item do">✅ Ghi dữ liệu theo cơ chế Upsert hoặc "ghi nếu chưa có"</div>
+        </div>
+      </div>
+
+      <div class="rule-box">
+        <div class="rule-num">3</div>
+        <h3>Payload nhỏ và tự chứa</h3>
+        <p>Mọi tham số đầu vào và đầu ra đều truyền qua Temporal Server và được lưu vĩnh viễn vào Event History. Cần giữ payload gọn nhẹ để hệ thống luôn nhanh.</p>
+        <div class="rule-dos-donts">
+          <div class="rule-item dont">❌ Không trả về nội dung file raw cả chục MB trong kết quả</div>
+          <div class="rule-item dont">❌ Không truyền đường dẫn file local (<code>/tmp/...</code>) giữa các bước vì mỗi bước có thể chạy ở máy khác nhau</div>
+          <div class="rule-item do">✅ Lưu file lớn vào MinIO/S3, chỉ truyền mã <code>file_id</code></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Code ví dụ trực quan -->
+  <section class="code-section">
+    <div>
+      <h2>Code thực tế trông như thế nào?</h2>
+      <p class="lead">Mẫu code Python chuẩn với SDK <code>temporalio</code> theo đúng nguyên tắc trên.</p>
+    </div>
+
+    <div class="code-container">
+      <div class="code-header">
+        <div class="code-tabs">
+          <button class="code-tab-btn active" data-code="workflow">workflow.py</button>
+          <button class="code-tab-btn" data-code="activity">activity.py</button>
+          <button class="code-tab-btn" data-code="client">client.py</button>
+        </div>
+        <span style="font-size:0.75rem; color:#9ca3af; font-family:var(--font-mono)">Python SDK</span>
+      </div>
+
+      <div id="code-workflow">
+<pre><span class="cm"># workflow.py - Chỉ điều phối, không làm I/O</span>
+<span class="kw">from</span> datetime <span class="kw">import</span> timedelta
+<span class="kw">from</span> temporalio <span class="kw">import</span> workflow
+<span class="kw">from</span> temporalio.common <span class="kw">import</span> RetryPolicy
+
+<span class="kw">@workflow.defn</span>(name=<span class="str">"IngestDocumentWorkflow"</span>)
+<span class="kw">class</span> <span class="typ">IngestDocumentWorkflow</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        self._progress = <span class="str">"Khởi tạo"</span>
+
+    <span class="kw">@workflow.query</span>(name=<span class="str">"get_progress"</span>)
+    <span class="kw">def</span> <span class="fn">get_progress</span>(self) -> str:
+        <span class="kw">return</span> self._progress
+
+    <span class="kw">@workflow.run</span>
+    <span class="kw">async def</span> <span class="fn">run</span>(self, doc_id: str) -> dict:
+        self._progress = <span class="str">"Đang bóc tách văn bản"</span>
+        <span class="cm"># 1. Gọi Activity chuyển đổi PDF sang Markdown</span>
+        doc_data = <span class="kw">await</span> workflow.execute_activity(
+            <span class="str">"convert_document"</span>,
+            doc_id,
+            start_to_close_timeout=timedelta(minutes=<span class="typ">5</span>),
+            retry_policy=RetryPolicy(maximum_attempts=<span class="typ">3</span>),
+        )
+
+        self._progress = <span class="str">"Đang tạo vector embedding"</span>
+        <span class="cm"># 2. Gọi Activity chunking & embedding</span>
+        result = <span class="kw">await</span> workflow.execute_activity(
+            <span class="str">"index_chunks"</span>,
+            doc_data,
+            start_to_close_timeout=timedelta(minutes=<span class="typ">2</span>),
+        )
+
+        self._progress = <span class="str">"Hoàn tất"</span>
+        <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"SUCCESS"</span>, <span class="str">"chunks_indexed"</span>: result[<span class="str">"count"</span>]}</pre>
+      </div>
+
+      <div id="code-activity" style="display:none">
+<pre><span class="cm"># activity.py - Nơi làm việc nặng và thao tác I/O</span>
+<span class="kw">from</span> temporalio <span class="kw">import</span> activity
+<span class="kw">from</span> temporalio.exceptions <span class="kw">import</span> ApplicationError
+
+<span class="kw">@activity.defn</span>(name=<span class="str">"convert_document"</span>)
+<span class="kw">async def</span> <span class="fn">convert_document</span>(doc_id: str) -> dict:
+    <span class="cm"># Đọc file từ MinIO / S3 bằng doc_id (Idempotent)</span>
+    raw_path = <span class="kw">await</span> download_from_storage(doc_id)
+    <span class="kw">if not</span> raw_path:
+        <span class="cm"># File không tồn tại thì không retry vô ích</span>
+        <span class="kw">raise</span> ApplicationError(<span class="str">"Không tìm thấy file"</span>, non_retryable=<span class="typ">True</span>)
+    
+    <span class="cm"># Gửi heartbeat nếu tiến trình xử lý kéo dài nhiều trang</span>
+    activity.heartbeat(<span class="str">"Đang chạy OCR trang 1..."</span>)
+    markdown_content = <span class="kw">await</span> run_docling_ocr(raw_path)
+
+    <span class="kw">return</span> {<span class="str">"doc_id"</span>: doc_id, <span class="str">"text_length"</span>: len(markdown_content)}</pre>
+      </div>
+
+      <div id="code-client" style="display:none">
+<pre><span class="cm"># client.py - Giao diện khởi động và kiểm tra</span>
+<span class="kw">from</span> temporalio.client <span class="kw">import</span> Client
+
+<span class="kw">async def</span> <span class="fn">main</span>():
+    client = <span class="kw">await</span> Client.connect(<span class="str">"localhost:7233"</span>)
+
+    <span class="cm"># Khởi động Workflow với ID duy nhất</span>
+    handle = <span class="kw">await</span> client.start_workflow(
+        <span class="str">"IngestDocumentWorkflow"</span>,
+        <span class="str">"doc-contract-2026.pdf"</span>,
+        id=<span class="str">"ingest-doc-contract-2026"</span>,
+        task_queue=<span class="str">"ingest-tq"</span>,
+    )
+
+    <span class="cm"># Truy vấn tiến độ bất kỳ lúc nào</span>
+    progress = <span class="kw">await</span> handle.query(<span class="str">"get_progress"</span>)
+    print(f<span class="str">"Tiến độ hiện tại: {progress}"</span>)
+
+    <span class="cm"># Chờ kết quả cuối cùng</span>
+    res = <span class="kw">await</span> handle.result()
+    print(f<span class="str">"Kết quả: {res}"</span>)</pre>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- So sánh với các giải pháp khác -->
+  <section>
+    <div style="margin-bottom:16px">
+      <h2>Tại sao không dùng giải pháp thông thường?</h2>
+      <p class="lead">Bảng đối chiếu cụ thể giữa Temporal và các mô hình xử lý nền quen thuộc.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Tiêu chí</th>
+            <th>Cron Job / Script thường</th>
+            <th>Celery / RabbitMQ</th>
+            <th>Temporal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Khi máy chủ cúp điện / chết RAM</b></td>
+            <td>Mất sạch dữ liệu trong RAM. Chạy lại từ đầu.</td>
+            <td>Task bị đẩy lại queue nhưng phải tự xử lý việc bước nào đã làm dở.</td>
+            <td><span style="color:var(--ok); font-weight:600">Tự phục hồi:</span> Tua lại lịch sử, chỉ chạy tiếp đúng bước đang dở.</td>
+          </tr>
+          <tr>
+            <td><b>Theo dõi tiến trình nhiều bước</b></td>
+            <td>Tự viết bảng DB, tự cập nhật từng cờ trạng thái bằng tay.</td>
+            <td>Phải tự nối dây (chaining/canvas), khó debug khi lỗi ở giữa.</td>
+            <td><span style="color:var(--ok); font-weight:600">Tự nhiên:</span> Viết code tuần tự <code>await a(); await b();</code> như hàm thường.</td>
+          </tr>
+          <tr>
+            <td><b>Chờ duyệt (Human-in-the-loop)</b></td>
+            <td>Rất khó hoặc phải viết webhook phức tạp.</td>
+            <td>Khó giữ trạng thái chờ dài hạn (hàng ngày, hàng tuần).</td>
+            <td><span style="color:var(--ok); font-weight:600">Đơn giản:</span> Chờ bằng Signal, ngủ hàng tháng không tốn CPU.</td>
+          </tr>
+          <tr>
+            <td><b>Quan sát & Debug</b></td>
+            <td>Đọc file log khổng lồ để tìm dòng lỗi.</td>
+            <td>Xem trạng thái task trên Flower hoặc Celery UI.</td>
+            <td><span style="color:var(--ok); font-weight:600">Web UI đầy đủ:</span> Xem rõ từng input, output, lỗi stack trace của từng bước.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Các câu hỏi thường gặp -->
+  <section class="faq-grid">
+    <div style="margin-bottom:8px">
+      <h2>Câu hỏi thường gặp</h2>
+    </div>
+
+    <details>
+      <summary>Temporal Server có chạy code của tôi không?</summary>
+      <p><b>Không.</b> Temporal Server không bao giờ chạy code Python/Go của bạn. Server chỉ đóng vai trò bộ não điều phối: ghi nhận sự kiện vào database, quản lý Task Queue, tính giờ timer và gửi task cho Worker. Code của bạn hoàn toàn chạy trên máy chủ Worker.</p>
+    </details>
+
+    <details>
+      <summary>Tại sao trong Workflow không được dùng time.sleep() hay datetime.now()?</summary>
+      <p>Vì cơ chế phục hồi dựa trên Replay (tua lại lịch sử). Khi replay, hàm Workflow chạy lại từ đầu. Nếu bạn dùng <code>datetime.now()</code>, mỗi lần chạy lại sẽ ra một mốc thời gian khác nhau, phá vỡ tính nhất quán (Non-determinism). Khi cần lấy giờ, Temporal cung cấp hàm <code>workflow.now()</code> luôn trả về đúng mốc thời gian lúc sự kiện đó thực sự diễn ra trong lịch sử.</p>
+    </details>
+
+    <details>
+      <summary>Tôi có thể huỷ (Cancel) một job đang chạy không?</summary>
+      <p><b>Có.</b> Bạn có thể gọi <code>handle.cancel()</code> từ Client hoặc bấm Cancel trên giao diện Temporal Web. Workflow sẽ nhận được thông báo huỷ và có thể thực hiện dọn dẹp tài nguyên (rollback/cleanup) nếu cần.</p>
+    </details>
+
+    <details>
+      <summary>Task Queue khác gì so với Message Queue thông thường như Kafka hay RabbitMQ?</summary>
+      <p>Trong Kafka hay RabbitMQ, bạn là người chịu trách nhiệm giữ trạng thái của toàn bộ tiến trình phân tán. Với Temporal, Task Queue chỉ là một ống dẫn việc nội bộ. Temporal Server quản lý trạng thái, retry, timeout và logic điều phối tổng thể, bạn không phải đau đầu thiết kế hàng đợi trung gian.</p>
+    </details>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div>Tài liệu kỹ thuật nội bộ · Dự án Xử lý dữ liệu đầu vào &amp; Trích xuất thông tin</div>
+    <div>Chi tiết Python SDK xem tại <a href="biKipTemporal.md">biKipTemporal.md</a> hoặc <a href="https://docs.temporal.io" target="_blank" rel="noopener">docs.temporal.io</a></div>
+  </footer>
+
+</div>
+
+<script>
+// Chuyển đổi giao diện sáng/tối
+(function() {
+  const toggleBtn = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  const themeText = document.getElementById('themeText');
+  
+  function updateThemeUI(isDark) {
+    themeIcon.textContent = isDark ? '☀️' : '🌙';
+    themeText.textContent = isDark ? 'Chế độ sáng' : 'Chế độ tối';
+  }
+
+  const savedTheme = localStorage.getItem('temporal_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    updateThemeUI(true);
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light');
+    updateThemeUI(false);
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const target = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', target);
+    localStorage.setItem('temporal_theme', target);
+    updateThemeUI(target === 'dark');
+  });
+})();
+
+// Trình điều khiển luồng tương tác (Interactive Flow Player)
+(function() {
+  const tabs = document.querySelectorAll('.tab-btn');
+  const flowContents = document.querySelectorAll('.flow-content');
+  const chips = document.querySelectorAll('.chip');
+  const btnPrev = document.getElementById('btnPrev');
+  const btnNext = document.getElementById('btnNext');
+  const btnPlay = document.getElementById('btnPlay');
+
+  let activeFlowId = 'happy';
+  let currentStepIdx = 0;
+  let playTimer = null;
+
+  function getCurrentSteps() {
+    const container = document.getElementById('flow-' + activeFlowId);
+    return Array.from(container.querySelectorAll('.step-card'));
+  }
+
+  function highlightStep(idx) {
+    const steps = getCurrentSteps();
+    if (steps.length === 0) return;
+    
+    currentStepIdx = Math.max(0, Math.min(idx, steps.length - 1));
+
+    steps.forEach((s, i) => {
+      s.classList.toggle('active', i === currentStepIdx);
+    });
+
+    const activeStep = steps[currentStepIdx];
+    const actorsStr = activeStep.getAttribute('data-actors') || '';
+    const activeActors = actorsStr.split(' ');
+
+    chips.forEach(chip => {
+      const actorName = chip.getAttribute('data-actor');
+      chip.classList.toggle('active', activeActors.includes(actorName));
+    });
+
+    // Cuộn nhẹ nếu ra ngoài tầm mắt khi autoplay
+    if (playTimer && activeStep) {
+      activeStep.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  function stopPlay() {
+    if (playTimer) {
+      clearInterval(playTimer);
+      playTimer = null;
+      btnPlay.textContent = '▶ Tự động chạy';
+      btnPlay.classList.remove('btn-primary');
+    }
+  }
+
+  function startPlay() {
+    stopPlay();
+    btnPlay.textContent = '❚❚ Tạm dừng';
+    btnPlay.classList.add('btn-primary');
+
+    const steps = getCurrentSteps();
+    if (currentStepIdx >= steps.length - 1) {
+      currentStepIdx = -1;
+    }
+
+    playTimer = setInterval(() => {
+      const s = getCurrentSteps();
+      if (currentStepIdx + 1 < s.length) {
+        highlightStep(currentStepIdx + 1);
+      } else {
+        stopPlay();
+      }
+    }, 2800);
+  }
+
+  // Switch tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      stopPlay();
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+
+      activeFlowId = tab.getAttribute('data-flow');
+      flowContents.forEach(fc => {
+        fc.classList.toggle('active', fc.id === 'flow-' + activeFlowId);
+      });
+
+      // Gán sự kiện click cho các bước trong tab mới
+      bindStepClicks();
+      highlightStep(0);
+    });
+  });
+
+  function bindStepClicks() {
+    const steps = getCurrentSteps();
+    steps.forEach((s, idx) => {
+      s.onclick = () => {
+        stopPlay();
+        highlightStep(idx);
+      };
+    });
+  }
+
+  btnPlay.addEventListener('click', () => {
+    if (playTimer) {
+      stopPlay();
+    } else {
+      startPlay();
+    }
+  });
+
+  btnNext.addEventListener('click', () => {
+    stopPlay();
+    const steps = getCurrentSteps();
+    if (currentStepIdx < steps.length - 1) {
+      highlightStep(currentStepIdx + 1);
+    }
+  });
+
+  btnPrev.addEventListener('click', () => {
+    stopPlay();
+    if (currentStepIdx > 0) {
+      highlightStep(currentStepIdx - 1);
+    }
+  });
+
+  // Khởi tạo
+  bindStepClicks();
+  highlightStep(0);
+})();
+
+// Code snippet switcher
+(function() {
+  const codeTabs = document.querySelectorAll('.code-tab-btn');
+  const codeBoxes = {
+    workflow: document.getElementById('code-workflow'),
+    activity: document.getElementById('code-activity'),
+    client: document.getElementById('code-client'),
+  };
+
+  codeTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      codeTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      const target = tab.getAttribute('data-code');
+      Object.keys(codeBoxes).forEach(key => {
+        codeBoxes[key].style.display = (key === target) ? 'block' : 'none';
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

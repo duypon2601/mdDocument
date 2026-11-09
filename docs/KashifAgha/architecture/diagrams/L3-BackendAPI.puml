@@ -1,0 +1,80 @@
+@startuml
+title <size:24>Component View: RAG Starter System - Backend API Service</size>\n<size:24>Level 3 - Component: Backend API Service (Django REST Framework)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,WebBrowser", $bgColor="#014f86", $borderColor="#00375d", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#2a6f97", $borderColor="#1d4d69", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System(LLMVLMProvider, "LLM / VLM Provider", $descr="Cung cấp model sinh câu trả lời, nhận diện ngôn ngữ, rephrase câu hỏi và tóm tắt trang (OpenAI, Azure, OpenRouter, vLLM hoặc Ollama)", $tags="Software System,External", $link="")
+
+System_Boundary("RAGStarterSystem_boundary", "RAG Starter System", $tags="Software System") {
+  Container_Boundary("RAGStarterSystem.BackendAPIService_boundary", "Backend API Service", $tags="Container") {
+    Component(RAGStarterSystem.BackendAPIService.AuthTokenController, "Auth & Token Controller", $techn="Django REST Framework, SimpleJWT", $descr="Đăng ký tài khoản, đăng nhập, phát hành và làm mới JWT token", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.HealthCheckController, "Health Check Controller", $techn="Django View", $descr="Kiểm tra tình trạng kết nối DB, Redis, Qdrant, MinIO (/api/health/)", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.DocumentViewSet, "Document ViewSet", $techn="Django REST Framework ViewSet", $descr="Upload file, upload hàng loạt, nạp từ URL/sitemap/Confluence, re-index, sinh download URL", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.ChatViewSetSSEStreamer, "Chat ViewSet & SSE Streamer", $techn="Django View, StreamingHttpResponse", $descr="Nhận câu hỏi, kiểm tra giới hạn tốc độ (rate limit), stream token và trích dẫn qua SSE (/api/chat/ask/)", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.LangGraphChatGraphEngine, "LangGraph Chat Graph Engine", $techn="LangGraph, LangChain", $descr="Đồ thị xử lý hội thoại: xác định ngôn ngữ → viết lại câu hỏi → truy vấn ngữ cảnh → sinh câu trả lời", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.CompositeRetriever, "Composite Retriever", $techn="LangChain Qdrant Retriever", $descr="Truy vấn đồng thời đa dạng nội dung (text, table, image, summary), mở rộng summary hits, deduplicate và lọc ngưỡng", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.FlashRankReranker, "FlashRank Reranker", $techn="FlashRank ONNX", $descr="Xếp hạng lại các đoạn văn bản bằng Cross-Encoder (FlashRank ONNX CPU) trước khi gửi cho LLM", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.LLMAdapter, "LLM Adapter", $techn="LangChain ChatOpenAI", $descr="Đóng gói kết nối và gọi model ngôn ngữ với OpenAI-compatible API", $tags="Component", $link="")
+    Component(RAGStarterSystem.BackendAPIService.ORMModelsRepositories, "ORM Models & Repositories", $techn="Django ORM", $descr="Quản lý Document, Chunk, Conversation, Message và tenant isolation", $tags="Component", $link="")
+  }
+
+  Container(RAGStarterSystem.IngestionWorker, "Ingestion Worker", $techn="Python 3.13, Celery (concurrency=1), Docling, MarkItDown, pypdf", $descr="Thực thi trích xuất file (Docling/MarkItDown), chunking, tóm tắt trang qua LLM, sinh embedding và upsert vào Vector DB", $tags="Container", $link="")
+  ContainerDb(RAGStarterSystem.RelationalDatabase, "Relational Database", $techn="PostgreSQL 17", $descr="Lưu trữ tài khoản người dùng, metadata tài liệu, chunks, lịch sử hội thoại và tin nhắn chat", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.MessageBrokerCache, "Message Broker & Cache", $techn="Redis 7", $descr="Hàng đợi tác vụ Celery, bộ đếm số lần worker lost và cache chia sẻ", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.ObjectStorage, "Object Storage", $techn="MinIO (S3 compatible)", $descr="Lưu trữ file tài liệu gốc tải lên, phục vụ tải về và đối chiếu trích dẫn nguồn", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.VectorDatabase, "Vector Database", $techn="Qdrant 1.12", $descr="Lưu trữ hybrid vectors (dense + BM25 sparse) và payload, phân vùng dữ liệu theo tenant (owner_id)", $tags="Container,Database", $link="")
+  Container(RAGStarterSystem.WebApplication, "Web Application", $techn="Next.js 16, React 19, TypeScript, Tailwind CSS", $descr="Giao diện chat trực tuyến, quản lý upload tài liệu, hiển thị trích dẫn nguồn và SSE streaming", $tags="Container,WebBrowser", $link="")
+}
+
+Rel(RAGStarterSystem.IngestionWorker, RAGStarterSystem.MessageBrokerCache, "Lắng nghe nhận task ingest/enrich, kiểm tra worker-loss count", $techn="Redis protocol", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker, RAGStarterSystem.RelationalDatabase, "Cập nhật trạng thái UPLOADING → PROCESSING → READY | ERROR, lưu metadata chunks", $techn="SQL", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker, RAGStarterSystem.ObjectStorage, "Đọc file gốc để trích xuất văn bản", $techn="S3 API", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker, RAGStarterSystem.VectorDatabase, "Upsert hybrid vectors và chunk payload kèm owner_id", $techn="HTTP/gRPC", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker, LLMVLMProvider, "Gọi LLM tóm tắt từng trang và VLM chú thích ảnh", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.WebApplication, RAGStarterSystem.BackendAPIService.AuthTokenController, "Đăng ký, lấy và làm mới JWT token", $techn="POST /api/token/", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.WebApplication, RAGStarterSystem.BackendAPIService.DocumentViewSet, "Upload file, xem danh sách tài liệu, re-index", $techn="REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.WebApplication, RAGStarterSystem.BackendAPIService.ChatViewSetSSEStreamer, "Gửi câu hỏi, nhận SSE stream token & citations", $techn="POST /api/chat/ask/", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.DocumentViewSet, RAGStarterSystem.BackendAPIService.ORMModelsRepositories, "Tạo Document record, gán owner_id", $techn="ORM", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.DocumentViewSet, RAGStarterSystem.ObjectStorage, "Lưu file upload vào S3 bucket", $techn="S3 API", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.DocumentViewSet, RAGStarterSystem.MessageBrokerCache, "Gọi delay() đẩy task ingest_document_task", $techn="Celery", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.ChatViewSetSSEStreamer, RAGStarterSystem.BackendAPIService.ORMModelsRepositories, "Lưu Conversation và Message", $techn="ORM", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.ChatViewSetSSEStreamer, RAGStarterSystem.BackendAPIService.LangGraphChatGraphEngine, "Khởi chạy đồ thị LangGraph với câu hỏi và lịch sử chat", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.LangGraphChatGraphEngine, RAGStarterSystem.BackendAPIService.LLMAdapter, "Xác định ngôn ngữ và rephrase câu hỏi", $techn="LangChain", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.LangGraphChatGraphEngine, RAGStarterSystem.BackendAPIService.CompositeRetriever, "Truy vấn các chunk liên quan theo từng content type", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.CompositeRetriever, RAGStarterSystem.VectorDatabase, "Hybrid search: dense + sparse vectors với filter owner_id", $techn="gRPC/HTTP", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.CompositeRetriever, RAGStarterSystem.BackendAPIService.FlashRankReranker, "Gửi danh sách ứng viên chunk để rerank", $techn="In-process call", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.LangGraphChatGraphEngine, RAGStarterSystem.BackendAPIService.LLMAdapter, "Sinh câu trả lời từ ngữ cảnh đã rerank", $techn="LangChain", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.LLMAdapter, LLMVLMProvider, "Gọi API chat completion", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.HealthCheckController, RAGStarterSystem.RelationalDatabase, "Kiểm tra kết nối PostgreSQL", $techn="SQL", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.HealthCheckController, RAGStarterSystem.MessageBrokerCache, "Kiểm tra kết nối Redis", $techn="PING", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.HealthCheckController, RAGStarterSystem.VectorDatabase, "Kiểm tra collection vector", $techn="HTTP GET", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService.HealthCheckController, RAGStarterSystem.ObjectStorage, "Kiểm tra S3 bucket", $techn="S3 API", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.MessageBrokerCache, RAGStarterSystem.IngestionWorker, "Nhận task ingest_document_task(doc_id)", $techn="Celery", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.IngestionWorker, RAGStarterSystem.BackendAPIService.ORMModelsRepositories, "Cập nhật Document status sang PROCESSING", $techn="ORM", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

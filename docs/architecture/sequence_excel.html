@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagram - Luồng xử lý file Excel (.xlsx)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mermaid.js CDN -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      sequence: {
+        actorMargin: 50,
+        boxMargin: 12,
+        boxTextMargin: 8,
+        noteMargin: 12,
+        messageMargin: 38,
+        useMaxWidth: true
+      }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Tài liệu bảng tính • Excel (.xlsx), chart, ảnh, công thức
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">
+            Luồng xử lý file Excel (.xlsx)
+          </h1>
+          <p class="text-slate-500 mt-1 text-sm sm:text-base">
+            Mỗi vùng ô thành một bảng Markdown, chart gốc đọc thẳng số liệu từ XML, ảnh dán vào sheet đi OCR hoặc Vision LLM. Phần chunk và embedding xem ở <a class="text-blue-600 underline" href="sequence_phase3.html">giai đoạn 3</a>.
+          </p>
+        </div>
+        <div>
+          <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-mono font-medium">
+            Task Queue: convert-tq
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sequence Diagram Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 overflow-x-auto">
+      <h2 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Sơ đồ tuần tự: Xử lý tệp Excel
+      </h2>
+
+      <div class="mermaid flex justify-center">
+sequenceDiagram
+    autonumber
+    actor Client as Người dùng / CLI
+    participant API as Ingestion API
+    participant DB as Metadata DB
+    participant MinIO as Object Storage (MinIO)
+    participant WF as Indexing Worker: workflow (ingest-tq)
+    participant CW as Conversion Worker (convert-tq)
+    participant OCR as OCR / Vision LLM
+
+    Note over WF, CW: Mũi tên giữa hai worker đi qua Temporal Server: workflow xếp activity vào task queue, worker poll queue rồi gửi kết quả lại cho server
+    Note over Client, WF: 1. TIẾP NHẬN FILE EXCEL
+    Client->>API: POST /documents (baocao.xlsx)
+    API->>API: Kiểm tra MIME thật và dung lượng, tính doc_id từ hash
+    API->>DB: get_or_create document (RECEIVED)
+    opt File đã có và không ở trạng thái chạy lại được
+        API-->>Client: duplicate = true, không tạo workflow mới
+    end
+    API->>MinIO: PUT raw/{doc_id}/baocao.xlsx
+    API->>DB: set_status(RECEIVED)
+    API->>WF: start_workflow(DocumentIngestionWorkflow, id = ingest-{doc_id}, task_queue = ingest-tq)
+    API-->>Client: 202 Accepted
+
+    Note over WF, CW: 2. PHÁT HIỆN ĐỊNH DẠNG (detect_format)
+    WF->>DB: update_status(CONVERTING)
+    WF->>CW: execute_activity("detect_format")
+    CW->>MinIO: GET raw
+    CW->>CW: kind = xlsx. Liệt kê ảnh trong xl/media theo sheet và vị trí neo (raster, từ 2 KB)
+    CW-->>WF: FormatInfo, ocr_page_batches = các lô 10 ảnh
+    Note over WF, CW: Chart không đi OCR. Không có ảnh thì danh sách lô rỗng
+
+    Note over WF, OCR: 3. BÓC BẢNG, CHART, CÔNG THỨC VÀ ĐỌC ẢNH SONG SONG
+    par parse_document
+        WF->>CW: execute_activity("parse_document")
+        CW->>MinIO: GET raw
+        CW->>CW: xlsx_tables: mỗi vùng ô liền nhau thành một bảng riêng, giá trị lấy từ cache của file
+        CW->>CW: Chart gốc: đọc số liệu trong cache của chart XML, cache trống thì đọc vùng ô mà công thức trỏ tới
+        CW->>CW: Công thức: thêm bảng công thức nguyên văn kèm giá trị đã tính (xlsx_formulas)
+        CW->>MinIO: PUT md-raw/{doc_id}/text.md
+        CW-->>WF: PartResult
+    and ocr_pages (mỗi lô một activity)
+        WF->>CW: execute_activity("ocr_pages", batch)
+        loop Mỗi ảnh trong lô
+            CW-->>WF: Heartbeat
+            CW->>OCR: OCR trước, chart, sơ đồ, bảng chụp thì gửi Vision LLM
+            OCR-->>CW: Markdown của ảnh
+        end
+        CW->>MinIO: PUT md-raw/{doc_id}/ocr/{batch}.md (mỗi ảnh một mục Ảnh N kèm tên sheet)
+        CW-->>WF: OcrResult (confidence)
+    end
+
+    Note over WF, CW: 4. GỘP MARKDOWN (finalize_markdown)
+    WF->>CW: execute_activity("finalize_markdown")
+    CW->>MinIO: GET md-raw/{doc_id}/text.md và ocr/*.md
+    CW->>CW: Nối phần ảnh sau phần bảng, thêm front-matter (tên file, doc_id)
+    CW->>MinIO: PUT md/{doc_id}.md
+    CW-->>WF: FinalizeResult
+    WF->>DB: update_status(CONVERTED)
+    Note over WF: Chuyển sang giai đoạn 3: chunk, embedding, Vector DB
+      </div>
+    </div>
+
+    <!-- Các trường hợp của Excel -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Case 1: ô tính -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-emerald-700 font-bold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-sm">A</span>
+          <h3>Dữ liệu trong ô</h3>
+        </div>
+        <p class="text-xs text-slate-600 mb-3">
+          Không dùng MarkItDown (pandas) nữa vì nó biến ô trống thành <code class="bg-slate-100 px-1 rounded">NaN</code>, cột không tiêu đề thành <code class="bg-slate-100 px-1 rounded">Unnamed: N</code> và trộn các bảng đặt cạnh nhau. Mỗi vùng ô liền nhau giờ là một bảng. Vùng chỉ một dòng hoặc một cột thành câu văn, ví dụ "Thuế suất VAT: 0.1".
+        </p>
+        <div class="bg-slate-50 p-3 rounded-lg font-mono text-xs text-slate-700 space-y-1 border border-slate-100">
+          <div class="text-slate-400 font-sans font-semibold mb-1">Ví dụ Markdown sinh ra:</div>
+          <div>## DoanhThu</div>
+          <div>| Tháng | Doanh thu | Lợi nhuận |</div>
+          <div>| --- | --- | --- |</div>
+          <div>| T1 | 100 | 30 |</div>
+          <div>| T2 | 150 | 45 |</div>
+        </div>
+        <p class="text-xs text-slate-500 mt-3">File quá 1 triệu ô hoặc không tách được bảng thì quay về MarkItDown.</p>
+      </div>
+
+      <!-- Case 2: chart, ảnh, công thức -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-amber-700 font-bold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-sm">B</span>
+          <h3>Chart, ảnh và công thức</h3>
+        </div>
+        <ul class="text-xs text-slate-600 space-y-2">
+          <li class="flex items-start gap-1.5">
+            <span class="text-amber-500 font-bold">1.</span>
+            <span>Chart vẽ bằng Excel (<code class="bg-slate-100 px-1 rounded">xl/charts/chartN.xml</code>) có sẵn số liệu trong file, nên được đọc thẳng thành bảng và gom vào phần "Biểu đồ trong file". Không cần OCR hay Vision LLM.</span>
+          </li>
+          <li class="flex items-start gap-1.5">
+            <span class="text-amber-500 font-bold">2.</span>
+            <span>Ảnh dán vào sheet (ảnh chụp màn hình, ảnh chart từ nơi khác) đi OCR. Nếu ảnh là chart, sơ đồ hay bảng chụp thì gửi Vision LLM khi đã bật <code class="bg-slate-100 px-1 rounded">INGEST_VISION_MODEL</code>.</span>
+          </li>
+          <li class="flex items-start gap-1.5">
+            <span class="text-indigo-600 font-bold">3.</span>
+            <span>Công thức (<code class="bg-slate-100 px-1 rounded">=SUM(A1:A10)</code>…) được ghi nguyên văn trong phần "Công thức trong file", kèm giá trị đã tính. Tắt bằng <code class="bg-slate-100 px-1 rounded">INGEST_XLSX_FORMULAS=false</code>.</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Ghi chú -->
+    <div class="bg-emerald-50 rounded-2xl border border-emerald-200 p-6">
+      <h3 class="text-sm font-bold text-emerald-900 mb-2">💡 Ghi chú</h3>
+      <p class="text-xs text-emerald-800 leading-relaxed">
+        File .xlsx là một file zip OpenXML (<code class="bg-white px-1 py-0.5 rounded border border-emerald-300">xl/worksheets/</code>, <code class="bg-white px-1 py-0.5 rounded border border-emerald-300">xl/charts/</code>, <code class="bg-white px-1 py-0.5 rounded border border-emerald-300">xl/media/</code>). Bảng và chart đọc thẳng từ XML. Chỉ những file có ảnh mới phải qua <code class="bg-white px-1 rounded border border-emerald-300">ocr_pages</code>. Upload với <code class="bg-white px-1 rounded border border-emerald-300">extract_media=false</code> thì chạy bản cũ: chỉ MarkItDown.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

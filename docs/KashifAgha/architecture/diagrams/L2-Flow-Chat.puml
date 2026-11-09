@@ -1,0 +1,49 @@
+@startuml
+title <size:24>Dynamic View: RAG Starter System</size>\n<size:24>Luồng hỏi đáp RAG và stream câu trả lời kèm trích dẫn (Chat & QA Flow)</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+AddElementTag("Person", $bgColor="#08427b", $borderColor="#052e56", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,WebBrowser", $bgColor="#014f86", $borderColor="#00375d", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#2a6f97", $borderColor="#1d4d69", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Software System", $bgColor="#ffffff", $borderColor="#0b4884", $fontColor="#0b4884", $shadowing="", $borderStyle="solid")
+
+System_Boundary("RAGStarterSystem_boundary", "RAG Starter System", $tags="Software System") {
+  ContainerDb(RAGStarterSystem.RelationalDatabase, "Relational Database", $techn="PostgreSQL 17", $descr="Lưu trữ tài khoản người dùng, metadata tài liệu, chunks, lịch sử hội thoại và tin nhắn chat", $tags="Container,Database", $link="")
+  ContainerDb(RAGStarterSystem.VectorDatabase, "Vector Database", $techn="Qdrant 1.12", $descr="Lưu trữ hybrid vectors (dense + BM25 sparse) và payload, phân vùng dữ liệu theo tenant (owner_id)", $tags="Container,Database", $link="")
+  Container(RAGStarterSystem.WebApplication, "Web Application", $techn="Next.js 16, React 19, TypeScript, Tailwind CSS", $descr="Giao diện chat trực tuyến, quản lý upload tài liệu, hiển thị trích dẫn nguồn và SSE streaming", $tags="Container,WebBrowser", $link="")
+  Container(RAGStarterSystem.BackendAPIService, "Backend API Service", $techn="Python 3.13, Django 5.1, DRF, Gunicorn, LangChain, LangGraph", $descr="Cung cấp REST API, xác thực JWT, điều phối LangGraph, stream SSE và quản lý CRUD tài liệu", $tags="Container", $link="")
+}
+
+Person(Ngườidùng, "Người dùng", $descr="Đăng ký/đăng nhập tài khoản, tải lên tài liệu, tra cứu và hỏi đáp qua chat có trích dẫn nguồn", $tags="Person", $link="")
+System(LLMVLMProvider, "LLM / VLM Provider", $descr="Cung cấp model sinh câu trả lời, nhận diện ngôn ngữ, rephrase câu hỏi và tóm tắt trang (OpenAI, Azure, OpenRouter, vLLM hoặc Ollama)", $tags="Software System,External", $link="")
+
+Rel(Ngườidùng, RAGStarterSystem.WebApplication, "1: Gửi câu hỏi trong phiên hội thoại", $techn="HTTPS", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.WebApplication, RAGStarterSystem.BackendAPIService, "2: POST /api/chat/ask/ (SSE stream request)", $techn="HTTPS / JWT", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, LLMVLMProvider, "3: Xác định ngôn ngữ và rephrase câu hỏi dựa trên lịch sử", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.VectorDatabase, "4: Tìm kiếm hybrid dense + sparse (lọc theo owner_id)", $techn="HTTP/gRPC (TCP 6333)", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.WebApplication, "5: Phát tín hiệu trích dẫn citations qua SSE trước", $techn="HTTPS / JWT", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, LLMVLMProvider, "6: Sinh câu trả lời từ ngữ cảnh đã rerank", $techn="HTTPS / REST", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.WebApplication, "7: Stream từng token câu trả lời về giao diện người dùng theo thời gian thực", $techn="HTTPS / JWT", $tags="Relationship", $link="")
+Rel(RAGStarterSystem.BackendAPIService, RAGStarterSystem.RelationalDatabase, "8: Lưu câu hỏi và câu trả lời vào Message history", $techn="SQL (TCP 5432)", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,63 @@
+@startuml
+title <size:24>Component View: Document Ingestion System - Conversion Worker</size>\n<size:24>Level 3 - Component: Conversion Worker</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#8c8c8c", $borderColor="#626262", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Temporal", $bgColor="#5b3fa0", $borderColor="#3f2c70", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Component,Module", $bgColor="#d6e9fb", $borderColor="#95a3af", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,Database", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = DashedLine())
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System(OCRVisionModel, "OCR / Vision Model", $descr="Đọc chữ từ ảnh và PDF scan (Tesseract, PaddleOCR hoặc VLM)", $tags="Software System,External", $link="")
+
+System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System", $tags="Software System") {
+  Container_Boundary("DocumentIngestionSystem.ConversionWorker_boundary", "Conversion Worker", $tags="Container") {
+    Component(DocumentIngestionSystem.ConversionWorker.Workerconverttq, "Worker (convert-tq)", $techn="temporalio.worker", $descr="Đăng ký activity convert, giới hạn số activity chạy song song theo CPU/GPU", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.detect_format, "detect_format", $techn="@activity.defn, python-magic, PyMuPDF", $descr="Loại file, PDF có lớp text hay không, danh sách trang cần OCR. Trả FormatInfo nhỏ", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.parse_document, "parse_document", $techn="@activity.defn", $descr="Parse phần có text, ghi md-raw/{doc_id}/text.md", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.PDFParser, "PDF Parser", $techn="Docling / PyMuPDF", $descr="Giữ heading, bảng, thứ tự đọc, số trang", $tags="Component,Module", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.OfficeParser, "Office Parser", $techn="MarkItDown / python-docx / python-pptx / openpyxl", $descr="DOCX, PPTX, XLSX → Markdown", $tags="Component,Module", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.HTMLTextParser, "HTML / Text Parser", $techn="markdownify / BeautifulSoup", $descr="HTML, TXT, CSV → Markdown", $tags="Component,Module", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.ocr_pages, "ocr_pages", $techn="@activity.defn", $descr="OCR một lô trang (fan-out theo lô), ghi md-raw/{doc_id}/ocr/{batch}.md, heartbeat từng trang, trả điểm tin cậy", $tags="Component", $link="")
+    Component(DocumentIngestionSystem.ConversionWorker.finalize_markdown, "finalize_markdown", $techn="@activity.defn, python-frontmatter", $descr="Ghép text và OCR theo thứ tự trang, chuẩn hóa heading/bảng, bỏ header/footer lặp, thêm front-matter, ghi md/{doc_id}.md", $tags="Component", $link="")
+  }
+
+  Container(DocumentIngestionSystem.TemporalServer, "Temporal Server", $techn="Temporal (self-hosted, PostgreSQL riêng) hoặc Temporal Cloud", $descr="Lưu lịch sử từng bước của workflow, quản lý task queue, timer, retry; kèm Temporal Web UI", $tags="Container,Temporal", $link="")
+  ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
+}
+
+Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.TemporalServer, "Long-poll convert-tq, heartbeat, trả kết quả", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.detect_format, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.parse_document, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.ocr_pages, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.finalize_markdown, "Chạy", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.detect_format, DocumentIngestionSystem.ObjectStorage, "GET raw", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ObjectStorage, "GET raw, PUT md-raw", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.PDFParser, "PDF", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.OfficeParser, "DOCX / PPTX / XLSX", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.HTMLTextParser, "HTML / TXT / CSV", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, DocumentIngestionSystem.ObjectStorage, "GET raw, PUT md-raw/ocr", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, OCRVisionModel, "OCR từng trang", $techn="HTTPS / local", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.finalize_markdown, DocumentIngestionSystem.ObjectStorage, "GET md-raw, PUT md", $techn="S3 API", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

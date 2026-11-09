@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RAG Starter vận hành</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Lora:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Bố cục: một cột đọc, mỗi luồng là một "dây chuyền" bước dọc; dàn diễn viên phía trên sáng lên theo bước đang chọn, như bút dạ quang trên giấy */
+:root {
+  --bg: #f3f5f4;
+  --paper: #ffffff;
+  --fg: #172026;
+  --muted: #5b6770;
+  --line: #d7dedb;
+  --accent: #1f5f8b;
+  --accent-soft: #e2edf5;
+  --mark: #f6dc5c;
+  --mark-fg: #2a2300;
+  --ok: #2f7d4f;
+  --warn: #a86a12;
+  --bad: #b23b3b;
+  --font-display: "Lora", Georgia, "Times New Roman", serif;
+  --font-body: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171b; --paper: #182127; --fg: #e4eaec; --muted: #97a4ab; --line: #2b373e;
+    --accent: #7db7e0; --accent-soft: #1d3342; --mark: #d9bf3f; --mark-fg: #1b1600;
+    --ok: #6cc28f; --warn: #e0a74c; --bad: #e57d7d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171b; --paper: #182127; --fg: #e4eaec; --muted: #97a4ab; --line: #2b373e;
+  --accent: #7db7e0; --accent-soft: #1d3342; --mark: #d9bf3f; --mark-fg: #1b1600;
+  --ok: #6cc28f; --warn: #e0a74c; --bad: #e57d7d; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 16px/1.65 var(--font-body);
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 56px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: clamp(2rem, 5vw, 2.8rem); }
+h2 { font-size: 1.6rem; }
+h3 { font-size: 1.02rem; margin: 0; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.eyebrow { font: 500 0.75rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 20px; }
+.lead { font-size: 1.12rem; color: var(--fg); }
+.sub { color: var(--muted); }
+
+header { display: grid; gap: 16px; }
+.analogy {
+  background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; display: grid; gap: 6px;
+}
+.analogy strong { font-weight: 600; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.two a {
+  display: grid; gap: 4px; text-decoration: none; color: inherit;
+  padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper);
+}
+.two a:hover, .two a:focus-visible { border-color: var(--accent); outline: none; }
+.two .k { font: 600 0.8rem/1 var(--font-mono); color: var(--accent); }
+
+/* Thành phần */
+.cast-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cast-grid div { padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 2px; min-width: 0; }
+.cast-grid b { font-weight: 600; }
+.cast-grid span { font-size: 0.9rem; color: var(--muted); }
+.cast-grid .tech { font: 400 0.75rem/1.4 var(--font-mono); color: var(--accent); }
+
+/* Dàn diễn viên của mỗi luồng */
+.flow-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.cast { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; background: var(--bg); padding-block: 10px; }
+.chip {
+  font: 500 0.8rem/1 var(--font-body); padding: 7px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--muted);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.chip.on { background: var(--mark); color: var(--mark-fg); border-color: var(--mark); }
+button.play {
+  font: 600 0.85rem/1 var(--font-body); padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--paper);
+}
+button.play[aria-pressed="true"] { background: var(--paper); color: var(--accent); }
+button:focus-visible, .step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Thanh trạng thái tài liệu */
+.states { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 500 0.78rem/1 var(--font-mono); }
+.states .st { padding: 6px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); }
+.states .arrow { color: var(--muted); }
+.st.ok { border-color: var(--ok); color: var(--ok); }
+.st.bad { border-color: var(--bad); color: var(--bad); }
+.st.warn { border-color: var(--warn); color: var(--warn); }
+
+/* Các bước */
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: s; }
+.step {
+  counter-increment: s; position: relative; display: grid; grid-template-columns: 40px 1fr; gap: 0 14px;
+  padding: 14px 12px 14px 0; border-radius: 8px; cursor: pointer; transition: background .2s;
+}
+.step::before {
+  content: counter(s); grid-row: 1 / span 3; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; margin-left: 6px; font: 600 0.82rem/1 var(--font-mono);
+  background: var(--paper); border: 1.5px solid var(--line); color: var(--muted); position: relative; z-index: 1;
+}
+.step::after {
+  content: ""; position: absolute; left: 20.5px; top: 44px; bottom: -14px; width: 1.5px; background: var(--line);
+}
+.step:last-child::after { display: none; }
+.step.on { background: var(--accent-soft); }
+.step.on::before { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.step > * { min-width: 0; }
+.step h3 { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.step p { color: var(--fg); font-size: 0.97rem; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.tag { font: 400 0.72rem/1 var(--font-mono); padding: 4px 7px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.node { font: 500 0.75rem/1 var(--font-mono); color: var(--accent); }
+
+/* Sơ đồ rẽ nhánh hỏi đáp */
+.graph { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.graph svg { display: block; min-width: 640px; width: 100%; height: auto; }
+.graph text { font-family: var(--font-mono); font-size: 12px; fill: var(--fg); }
+.graph .lbl { font-family: var(--font-body); font-size: 11px; fill: var(--muted); }
+.graph rect { fill: var(--bg); stroke: var(--line); stroke-width: 1.2; }
+.graph rect.hi { fill: var(--accent-soft); stroke: var(--accent); }
+.graph rect.end { fill: var(--paper); stroke: var(--muted); stroke-dasharray: 3 3; }
+.graph path, .graph line { stroke: var(--muted); stroke-width: 1.3; fill: none; }
+.graph .head { fill: var(--muted); stroke: none; }
+
+/* Sự cố */
+ul.notes { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+ul.notes li { padding: 12px 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.diff { font-size: 0.92rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header>
+  <span class="eyebrow">docs/KashifAgha · rag-starter</span>
+  <h1>RAG Starter chạy như thế nào</h1>
+  <p class="lead">Hệ thống làm hai việc tách rời. Khi bạn tải tài liệu lên, nó đọc, cắt nhỏ và cất vào kho tìm kiếm. Khi bạn đặt câu hỏi, nó tìm vài đoạn sát nhất trong kho rồi nhờ LLM viết câu trả lời, có ghi nguồn.</p>
+  <div class="analogy">
+    <p>Cứ hình dung một thủ thư. Sách mới về, thủ thư đọc qua, chia thành từng đoạn và ghi phiếu mục lục cho mỗi đoạn. Có người hỏi, thủ thư tra phiếu, rút ra năm đoạn khớp nhất và trả lời dựa đúng vào mấy đoạn đó. Không có đoạn nào khớp thì nói thẳng là không tìm thấy.</p>
+  </div>
+  <nav class="two" aria-label="Hai luồng">
+    <a href="#nap"><span class="k">Luồng 1</span><b>Nạp tài liệu</b><span class="sub">Chạy nền, từ lúc tải file tới khi tìm được.</span></a>
+    <a href="#hoi"><span class="k">Luồng 2</span><b>Hỏi đáp</b><span class="sub">Từ câu hỏi tới câu trả lời có trích dẫn.</span></a>
+  </nav>
+</header>
+
+<section aria-labelledby="tp">
+  <h2 id="tp">Các thành phần</h2>
+  <p class="sub">Mọi thứ chạy bằng Docker Compose. Worker dùng chung code với Backend, chỉ khác lệnh khởi động.</p>
+  <div class="cast-grid">
+    <div><b>Giao diện web</b><span>Nơi bạn tải file lên và chat.</span><span class="tech">Next.js 16</span></div>
+    <div><b>Backend API</b><span>Nhận request, kiểm tra JWT, điều phối phần hỏi đáp.</span><span class="tech">Django 5 · LangGraph</span></div>
+    <div><b>Worker</b><span>Xử lý tài liệu ở chế độ nền, mỗi lần một tài liệu.</span><span class="tech">Celery</span></div>
+    <div><b>PostgreSQL</b><span>Lưu người dùng, tài liệu, chunk, hội thoại và trạng thái.</span><span class="tech">Postgres 17</span></div>
+    <div><b>Redis</b><span>Hàng đợi job và bộ đếm số lần thử.</span><span class="tech">Redis 7</span></div>
+    <div><b>MinIO</b><span>Giữ file gốc bạn tải lên.</span><span class="tech">S3 API</span></div>
+    <div><b>Qdrant</b><span>Kho vector dùng để tìm kiếm.</span><span class="tech">Qdrant 1.12</span></div>
+    <div><b>Embedding</b><span>Đổi một đoạn chữ thành dãy số (vector) để so độ giống nhau.</span><span class="tech">OpenAI · FastEmbed · Ollama</span></div>
+    <div><b>LLM / VLM</b><span>Viết lại câu hỏi, tóm tắt trang, mô tả ảnh, soạn câu trả lời.</span><span class="tech">OpenAI · Azure · Ollama…</span></div>
+  </div>
+</section>
+
+<section id="nap" aria-labelledby="h-nap" data-flow>
+  <div class="flow-head">
+    <div><span class="eyebrow">Luồng 1</span><h2 id="h-nap">Nạp tài liệu</h2></div>
+    <button class="play" type="button" id="play-nap" aria-pressed="false">▶ Chạy từng bước</button>
+  </div>
+  <p>Xử lý một tài liệu có thể mất vài phút, nên Backend không tự làm mà giao cho Worker qua hàng đợi. Trạng thái tài liệu đi qua các mốc sau:</p>
+  <div class="states" aria-label="Trạng thái tài liệu">
+    <span class="st">UPLOADING</span><span class="arrow">→</span>
+    <span class="st">PROCESSING</span><span class="arrow">→</span>
+    <span class="st warn">ENRICHING</span><span class="arrow">→</span>
+    <span class="st ok">READY</span>
+    <span class="arrow">· lỗi:</span><span class="st bad">ERROR</span>
+  </div>
+  <div class="cast" aria-label="Thành phần tham gia">
+    <span class="chip" data-a="web">Web</span><span class="chip" data-a="api">Backend API</span><span class="chip" data-a="minio">MinIO</span><span class="chip" data-a="pg">PostgreSQL</span><span class="chip" data-a="redis">Redis</span><span class="chip" data-a="worker">Worker</span><span class="chip" data-a="emb">Embedding</span><span class="chip" data-a="llm">LLM / VLM</span><span class="chip" data-a="qdrant">Qdrant</span>
+  </div>
+  <ol class="steps">
+    <li class="step" tabindex="0" data-actors="web api">
+      <h3>Tải file lên</h3>
+      <p>Bạn chọn file trên giao diện. Web gửi nó tới <code>POST /api/documents/</code> kèm token JWT.</p>
+      <div class="tags"><span class="tag">PDF, DOCX, XLSX, URL, sitemap, Confluence</span></div>
+    </li>
+    <li class="step" tabindex="0" data-actors="api minio pg">
+      <h3>Cất file gốc <span class="st">UPLOADING</span></h3>
+      <p>Backend lưu file vào MinIO và tạo bản ghi tài liệu trong PostgreSQL, gắn <code>owner_id</code> của bạn.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api redis">
+      <h3>Xếp vào hàng đợi</h3>
+      <p>Backend đẩy job <code>ingest_document</code> vào Redis rồi trả lời giao diện ngay, nên bạn không phải chờ xử lý xong.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="redis worker pg">
+      <h3>Worker nhận job <span class="st">PROCESSING</span></h3>
+      <p>Worker lấy job ra, ghi thêm một lần thử vào Redis, rồi đổi trạng thái tài liệu.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="worker minio">
+      <h3>Rút chữ ra khỏi file</h3>
+      <p>Worker tải file từ MinIO về và chuyển thành Markdown. Docling được thử trước vì nó giữ được bố cục, bảng và đọc được chữ trong ảnh quét (OCR). Thiếu Docling thì lùi dần về MarkItDown, pypdf, cuối cùng là đọc text thường.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="worker">
+      <h3>Cắt thành chunk</h3>
+      <p>Markdown được cắt theo heading. Bảng luôn nằm nguyên trong một chunk. Mỗi chunk có mã băm SHA-256, nên nạp lại cùng tài liệu không sinh bản trùng.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="worker emb qdrant pg">
+      <h3>Tạo vector và lưu vào Qdrant</h3>
+      <p>Mỗi chunk có hai vector: dense để tìm theo nghĩa, BM25 sparse để tìm theo từ khóa (mã lỗi, tên riêng). Worker upsert chúng vào Qdrant kèm <code>owner_id</code>. Từ lúc này tài liệu đã tìm được.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="worker llm emb qdrant">
+      <h3>Làm giàu, nếu cần <span class="st warn">ENRICHING</span></h3>
+      <p>Khi tài liệu cần tóm tắt trang hoặc có ảnh, một job thứ hai chạy sau. LLM tóm tắt từng trang thành chunk loại <code>SUMMARY</code> trỏ về các chunk gốc, VLM viết mô tả cho từng ảnh. Các phần này cũng được tạo vector và lưu vào Qdrant.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="pg">
+      <h3>Xong <span class="st ok">READY</span></h3>
+      <p>Trạng thái chuyển sang READY. Nếu gặp lỗi không cứu được, tài liệu thành <span class="mono">ERROR</span> kèm thông báo lỗi.</p>
+    </li>
+  </ol>
+</section>
+
+<section id="hoi" aria-labelledby="h-hoi" data-flow>
+  <div class="flow-head">
+    <div><span class="eyebrow">Luồng 2</span><h2 id="h-hoi">Hỏi đáp</h2></div>
+    <button class="play" type="button" id="play-hoi" aria-pressed="false">▶ Chạy từng bước</button>
+  </div>
+  <p>Phần hỏi đáp là một đồ thị LangGraph. Câu hỏi đi qua từng nút, có hai chỗ rẽ nhánh:</p>
+  <div class="graph" role="img" aria-label="Sơ đồ đồ thị hỏi đáp: câu chào đi thẳng tới conversational; câu hỏi thường đi qua determine_language, rephrase, retrieve, rồi tới generate nếu tìm được tài liệu, hoặc error_node nếu không.">
+    <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <rect class="end" x="10" y="85" width="70" height="36" rx="18"/><text x="45" y="108" text-anchor="middle">START</text>
+      <rect class="hi" x="180" y="20" width="140" height="36" rx="6"/><text x="250" y="43" text-anchor="middle">conversational</text>
+      <rect x="120" y="140" width="150" height="36" rx="6"/><text x="195" y="163" text-anchor="middle">determine_language</text>
+      <rect x="295" y="140" width="90" height="36" rx="6"/><text x="340" y="163" text-anchor="middle">rephrase</text>
+      <rect class="hi" x="410" y="140" width="90" height="36" rx="6"/><text x="455" y="163" text-anchor="middle">retrieve</text>
+      <rect class="hi" x="560" y="100" width="100" height="36" rx="6"/><text x="610" y="123" text-anchor="middle">generate</text>
+      <rect x="560" y="164" width="100" height="36" rx="6"/><text x="610" y="187" text-anchor="middle">error_node</text>
+      <rect class="end" x="690" y="20" width="60" height="36" rx="18"/><text x="720" y="43" text-anchor="middle">END</text>
+      <path d="M80,96 C120,70 140,40 178,38" marker-end="url(#ah)"/><text class="lbl" x="98" y="56">chào hỏi</text>
+      <path d="M80,110 C100,135 110,150 118,156" marker-end="url(#ah)"/><text class="lbl" x="70" y="150">câu hỏi</text>
+      <line x1="270" y1="158" x2="293" y2="158" marker-end="url(#ah)"/>
+      <line x1="385" y1="158" x2="408" y2="158" marker-end="url(#ah)"/>
+      <path d="M500,152 C530,140 535,120 558,118" marker-end="url(#ah)"/><text class="lbl" x="508" y="122">có tài liệu</text>
+      <path d="M500,164 C530,175 535,182 558,182" marker-end="url(#ah)"/><text class="lbl" x="508" y="198">không có</text>
+      <line x1="320" y1="38" x2="688" y2="38" marker-end="url(#ah)"/>
+      <path d="M660,110 C680,90 700,75 712,58" marker-end="url(#ah)"/>
+      <path d="M660,182 C735,170 740,100 730,58" marker-end="url(#ah)"/>
+    </svg>
+  </div>
+  <div class="cast" aria-label="Thành phần tham gia">
+    <span class="chip" data-a="web">Web</span><span class="chip" data-a="api">Backend API</span><span class="chip" data-a="llm">LLM</span><span class="chip" data-a="emb">Embedding</span><span class="chip" data-a="qdrant">Qdrant</span><span class="chip" data-a="rerank">FlashRank</span><span class="chip" data-a="pg">PostgreSQL</span>
+  </div>
+  <ol class="steps">
+    <li class="step" tabindex="0" data-actors="web api">
+      <h3>Gửi câu hỏi</h3>
+      <p>Web gọi <code>POST /api/chat/ask/</code> và giữ kết nối SSE mở để nhận chữ dần dần. Backend kiểm tra giới hạn số lượt hỏi (<code>THROTTLE_CHAT</code>).</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api llm">
+      <h3>Lọc câu chào <span class="node">conversational</span></h3>
+      <p>Nếu bạn chỉ chào hay cảm ơn, hệ thống trả lời luôn, không tìm tài liệu. Câu trả lời lấy từ mẫu có sẵn, hoặc do LLM viết nếu đặt <code>reply_mode=llm</code>.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api llm">
+      <h3>Nhận diện ngôn ngữ <span class="node">determine_language</span></h3>
+      <p>Hỏi LLM xem câu hỏi viết bằng tiếng gì (<code>langdetect</code> làm dự phòng), để câu trả lời dùng đúng ngôn ngữ đó.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api llm pg">
+      <h3>Viết lại câu hỏi <span class="node">rephrase</span></h3>
+      <p>Đọc mấy tin nhắn gần nhất và biến câu hỏi nối tiếp kiểu "thế còn cái kia?" thành một câu hỏi đủ nghĩa khi đứng riêng.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api emb qdrant">
+      <h3>Tìm đoạn liên quan <span class="node">retrieve</span></h3>
+      <p>Tìm song song trong bốn loại nội dung: văn bản, bảng, ảnh và tóm tắt trang. Mỗi lần tìm đều kết hợp dense với BM25 và luôn lọc <code>owner_id</code> theo tài khoản của bạn. Nếu trúng một chunk <code>SUMMARY</code>, hệ thống lấy thêm các chunk gốc của trang đó. Kết quả được gộp, bỏ trùng, giữ tối đa 10 đoạn.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api rerank">
+      <h3>Xếp hạng lại</h3>
+      <p>FlashRank chạy trên CPU, chấm lại độ liên quan của 10 đoạn và giữ 5 đoạn tốt nhất. Nếu không còn đoạn nào, luồng rẽ sang <span class="node">error_node</span> và báo là không tìm thấy thông tin.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api web">
+      <h3>Gửi trích dẫn trước</h3>
+      <p>Danh sách nguồn được gửi về giao diện qua SSE trước khi câu trả lời bắt đầu hiện ra.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="api llm web">
+      <h3>Viết câu trả lời <span class="node">generate</span></h3>
+      <p>LLM nhận 5 đoạn đó làm ngữ cảnh, được dặn chỉ trả lời theo tài liệu và từ chối nếu tài liệu không đủ. Chữ được stream về màn hình từng token.</p>
+    </li>
+    <li class="step" tabindex="0" data-actors="pg">
+      <h3>Lưu hội thoại</h3>
+      <p>Câu hỏi và câu trả lời được lưu vào bảng <code>Message</code> trong PostgreSQL, để lần hỏi sau bước viết lại câu hỏi có lịch sử mà đọc.</p>
+    </li>
+  </ol>
+</section>
+
+<section aria-labelledby="h-sc">
+  <h2 id="h-sc">Khi có sự cố</h2>
+  <ul class="notes">
+    <li>Docling nạp model nhận diện bố cục khá nặng, nên Worker chỉ xử lý một tài liệu một lúc (<code>concurrency=1</code>) với giới hạn 2GB RAM.</li>
+    <li>Nếu Worker chết giữa chừng, chẳng hạn vì hết RAM, job được trả lại hàng đợi. Redis đếm số lần thử theo key <code>rag:ingest_attempts:{id}</code>. Quá 3 lần thì tài liệu bị đánh <span class="mono">ERROR</span> để khỏi lặp mãi.</li>
+    <li>Nếu chỉ phần làm giàu (tóm tắt, mô tả ảnh) chết quá 3 lần, tài liệu vẫn thành <span class="mono">READY</span>. Chữ đã vào Qdrant từ trước nên vẫn hỏi được, chỉ thiếu tóm tắt và mô tả ảnh.</li>
+    <li>Celery Beat chạy <code>reap_stuck_documents</code> định kỳ. Tài liệu nằm ở UPLOADING, PROCESSING hoặc ENRICHING quá 60 phút sẽ bị chuyển sang <span class="mono">ERROR</span>.</li>
+    <li>Truy vấn nào gửi tới Qdrant cũng kèm bộ lọc <code>owner_id</code>, nên bạn không bao giờ nhận được đoạn trích từ tài liệu của người khác.</li>
+  </ul>
+  <p class="diff"><code>c4-model.md</code> chưa nhắc hai điểm có trong code <code>rag-starter/backend/rag/</code>: nút lọc câu chào <code>conversational</code> trong <code>graph.py</code>, và trạng thái <code>ENRICHING</code> với job làm giàu tách riêng trong <code>tasks.py</code>.</p>
+</section>
+
+</main>
+<script>
+(function () {
+  document.querySelectorAll('[data-flow]').forEach(function (flow) {
+    var steps = Array.prototype.slice.call(flow.querySelectorAll('.step'));
+    var chips = flow.querySelectorAll('.chip');
+    var btn = flow.querySelector('button.play');
+    var timer = null, idx = -1;
+
+    function select(i) {
+      idx = i;
+      steps.forEach(function (s, j) { s.classList.toggle('on', j === i); });
+      var actors = i >= 0 ? steps[i].dataset.actors.split(' ') : [];
+      chips.forEach(function (c) { c.classList.toggle('on', actors.indexOf(c.dataset.a) !== -1); });
+    }
+    function stop() {
+      clearInterval(timer); timer = null;
+      btn.setAttribute('aria-pressed', 'false'); btn.textContent = '▶ Chạy từng bước';
+    }
+    function tick() {
+      if (idx + 1 >= steps.length) { stop(); return; }
+      select(idx + 1);
+    }
+    steps.forEach(function (s, i) {
+      s.addEventListener('click', function () { stop(); select(i); });
+      s.addEventListener('focus', function () { if (!timer) select(i); });
+      s.addEventListener('mouseenter', function () { if (!timer) select(i); });
+    });
+    btn.addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      btn.setAttribute('aria-pressed', 'true'); btn.textContent = '❚❚ Dừng';
+      if (idx + 1 >= steps.length) idx = -1;
+      tick();
+      timer = setInterval(tick, 2400);
+    });
+    select(0);
+  });
+})();
+</script>
+</body>
+</html>

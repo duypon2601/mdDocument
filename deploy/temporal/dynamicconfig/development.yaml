@@ -1,0 +1,12 @@
+# Dynamic config cho Temporal chạy bằng docker compose.
+# Nguồn đã kiểm tra ngày 06/11/2026:
+#   - temporalio/temporal tag v1.32.2, common/dynamicconfig/constants.go:
+#     system.enableDeploymentVersions mặc định true (Worker Versioning).
+#   - temporalio/temporal-auto-scaled-workers (README, mục Dynamic config).
+#   - Tên key lấy từ chuỗi trong binary temporal-server của image 1.32.2.
+system.enableDeploymentVersions:
+  - value: true
+
+# Worker Controller tắt: hệ thống không dùng Lambda, worker chạy liên tục bằng docker compose.
+workercontroller.enabled:
+  - value: false
