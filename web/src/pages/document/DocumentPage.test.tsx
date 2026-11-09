@@ -205,6 +205,19 @@ describe('tab Thông tin', () => {
   })
 })
 
+describe('Tìm trong tài liệu này', () => {
+  it('chỉ hiện khi INDEXED và trỏ tới /search?doc_id=', async () => {
+    open('INDEXED')
+    const link = await screen.findByRole('link', { name: 'Tìm trong tài liệu này' })
+    expect(link).toHaveAttribute('href', `/search?doc_id=${ID}`)
+  })
+  it('không hiện khi chưa INDEXED', async () => {
+    open('CONVERTING')
+    await screen.findByRole('heading', { name: 'bao-cao.pdf' })
+    expect(screen.queryByRole('link', { name: 'Tìm trong tài liệu này' })).toBeNull()
+  })
+})
+
 describe('không tìm thấy', () => {
   it('hiện trang 404 có link về /files', async () => {
     open('INDEXED', {}, null, '/files/khong-co')

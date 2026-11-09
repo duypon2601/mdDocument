@@ -12,6 +12,7 @@ import { useToast } from '../../components/Toast'
 import { errText, useDocActions } from '../../hooks/useDocActions'
 import { PROFILE_LABEL, profileOf } from '../../lib/profile'
 import { isRunning } from '../../lib/status'
+import { ChunksTab } from './ChunksTab'
 import { InfoTab } from './InfoTab'
 import { MarkdownTab } from './MarkdownTab'
 import { Timeline } from './Timeline'
@@ -119,6 +120,12 @@ function Detail({ doc }: { doc: DocumentDetail }) {
               Re-index
             </Button>
             <Button onClick={downloadMarkdown}>Tải Markdown</Button>
+            <Link
+              to={`/search?doc_id=${doc.doc_id}`}
+              className="inline-flex min-h-9 items-center rounded-md border border-line bg-surface px-3.5 text-sm font-medium hover:bg-surface-2"
+            >
+              Tìm trong tài liệu này
+            </Link>
           </>
         )}
         <a
@@ -160,9 +167,7 @@ function Detail({ doc }: { doc: DocumentDetail }) {
       </div>
       <div role="tabpanel" id="tab-panel" aria-labelledby={`tab-${tab}`}>
         {tab === 'markdown' && <MarkdownTab doc={doc} />}
-        {tab === 'chunks' && (
-          <EmptyState title="Tab Chunk đang được xây dựng">Sẽ có ở bước sau.</EmptyState>
-        )}
+        {tab === 'chunks' && <ChunksTab doc={doc} />}
         {tab === 'info' && <InfoTab doc={doc} />}
       </div>
 
