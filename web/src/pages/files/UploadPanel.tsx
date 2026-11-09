@@ -1,8 +1,6 @@
 import { useRef, useState } from 'react'
 import { ApiError } from '../../api/client'
 import { useUpload } from '../../api/hooks'
-import type { Profile } from '../../api/types'
-import { PROFILES, loadProfile, saveProfile } from '../../lib/profile'
 
 type Item =
   | { id: number; name: string; state: 'sending' }
@@ -18,7 +16,6 @@ const STATE_TEXT = {
 } as const
 
 export function UploadPanel() {
-  const [profile, setProfile] = useState<Profile>(loadProfile)
   const [items, setItems] = useState<Item[]>([])
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -30,7 +27,6 @@ export function UploadPanel() {
     setItems((xs) => xs.map((x) => (x.id === id ? next : x)))
 
   function enqueue(files: File[]) {
-    const chosen = profile
     const added = files.map((f) => ({ id: nextId.current++, name: f.name }))
     setItems((xs) => [...added.map((a) => ({ ...a, state: 'sending' as const })), ...xs])
     // Gửi lần lượt từng file để không dồn nghẽn API
@@ -38,7 +34,7 @@ export function UploadPanel() {
       const { id, name } = added[i]
       queue.current = queue.current.then(async () => {
         try {
-          const r = await upload.mutateAsync({ file, profile: chosen })
+          const r = await upload.mutateAsync({ file, profile: 'v2' })
           patch(id, { id, name, state: r.duplicate ? 'duplicate' : 'accepted' })
         } catch (e) {
           const detail = e instanceof ApiError ? e.detail : 'Không gửi được'
@@ -54,40 +50,11 @@ export function UploadPanel() {
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  function choose(p: Profile) {
-    setProfile(p)
-    saveProfile(p)
-  }
-
   return (
     <section aria-labelledby="upload-title" className="mb-6 rounded-lg border border-line bg-surface p-4">
       <h2 id="upload-title" className="mb-3 text-lg font-semibold">
         Tải tài liệu lên
       </h2>
-
-      <fieldset className="mb-3">
-        <legend className="mb-1 text-sm text-muted">Kiểu xử lý</legend>
-        <div className="flex flex-wrap gap-2">
-          {PROFILES.map((p) => (
-            <label
-              key={p.value}
-              className="flex cursor-pointer flex-col rounded-md border border-line px-3 py-1.5 text-sm has-checked:border-accent has-checked:bg-run-bg has-focus-visible:outline-2"
-            >
-              <span className="flex items-center gap-2 font-medium">
-                <input
-                  type="radio"
-                  name="profile"
-                  value={p.value}
-                  checked={profile === p.value}
-                  onChange={() => choose(p.value)}
-                />
-                {p.label}
-              </span>
-              <span className="text-xs text-muted">{p.hint}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
 
       <div
         onDragOver={(e) => {

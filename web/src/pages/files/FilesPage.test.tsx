@@ -168,7 +168,7 @@ describe('upload', () => {
   const pdf = () => new File(['x'], 'moi.pdf', { type: 'application/pdf' })
   const created = { ...doc('e'.repeat(64), 'moi.pdf', 'RECEIVED') }
 
-  it('thành công: gửi field theo profile mặc định v2 và hiện "Đã nhận"', async () => {
+  it('thành công: luôn xử lý theo v2 và hiện "Đã nhận"', async () => {
     const { forms } = mockFetchUpload([Response.json({ duplicate: false, ...created }, { status: 202 })])
     at()
     await userEvent.upload(screen.getByLabelText('Chọn file để tải lên'), pdf())
@@ -178,31 +178,9 @@ describe('upload', () => {
     expect(forms[0].get('pipeline_version')).toBe('2')
   })
 
-  it('đổi profile sang bản cũ thì gửi field tương ứng và nhớ lựa chọn', async () => {
-    const { forms } = mockFetchUpload([Response.json({ duplicate: false, ...created }, { status: 202 })])
+  it('không còn ô chọn kiểu xử lý', () => {
     at()
-    await userEvent.click(screen.getByRole('radio', { name: /Bản cũ/ }))
-    expect(localStorage.getItem('profile')).toBe('legacy')
-    await userEvent.upload(screen.getByLabelText('Chọn file để tải lên'), pdf())
-    await screen.findByText('Đã nhận')
-    expect(forms[0].get('extract_media')).toBe('false')
-    expect(forms[0].get('pipeline_version')).toBe('2')
-  })
-
-  it('profile v1 gửi pipeline_version=1', async () => {
-    const { forms } = mockFetchUpload([Response.json({ duplicate: false, ...created }, { status: 202 })])
-    at()
-    await userEvent.click(screen.getByRole('radio', { name: /Mới v1/ }))
-    await userEvent.upload(screen.getByLabelText('Chọn file để tải lên'), pdf())
-    await screen.findByText('Đã nhận')
-    expect(forms[0].get('extract_media')).toBe('true')
-    expect(forms[0].get('pipeline_version')).toBe('1')
-  })
-
-  it('đọc profile đã nhớ', () => {
-    localStorage.setItem('profile', 'v1')
-    at()
-    expect(screen.getByRole('radio', { name: /Mới v1/ })).toBeChecked()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
   it('trùng: báo dùng lại kết quả', async () => {
