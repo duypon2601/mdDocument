@@ -11,7 +11,9 @@ x-app: &app
     INGEST_S3_SECRET_KEY: ${INGEST_S3_SECRET_KEY:-minioadmin}
     INGEST_S3_BUCKET: ${INGEST_S3_BUCKET:-ingest}
     INGEST_QDRANT_URL: http://qdrant:6333
-    INGEST_EMBED_BASE_URL: ${INGEST_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}
+    # Biến riêng cho container: INGEST_EMBED_BASE_URL trong .env thường là localhost,
+    # mà localhost trong container là chính container, không phải máy chạy Ollama.
+    INGEST_EMBED_BASE_URL: ${INGEST_DOCKER_EMBED_BASE_URL:-http://host.docker.internal:11434/v1}
   extra_hosts:
     - "host.docker.internal:host-gateway"
   depends_on:
