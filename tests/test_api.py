@@ -288,8 +288,10 @@ def test_start_failure_on_new_doc_leaves_restartable_row(env):
     assert (rec.status, rec.error_code) == ("FAILED", "START_FAILED")
 
 
-def test_ui_page_served(env):
-    client, *_ = env
+def test_ui_page_served(env, tmp_path):
+    _, storage, repo, wf = env
+    # static_dir không có index.html: dù máy đã build web/ vẫn kiểm tra trang cũ
+    client = TestClient(create_app(storage, repo, wf, Settings(), tmp_path / "chua-build"))
     r = client.get("/")
     assert r.status_code == 200 and "Nạp tài liệu" in r.text
     assert "/documents/" in r.text
