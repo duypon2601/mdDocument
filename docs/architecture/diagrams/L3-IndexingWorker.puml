@@ -45,6 +45,8 @@ System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System",
   ContainerDb(DocumentIngestionSystem.VectorDB, "Vector DB", $techn="Qdrant (hoặc pgvector, Milvus)", $descr="Vector + payload: text chunk, doc_id, heading, trang, index_version", $tags="Container,Database", $link="")
 }
 
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.TemporalServer, "Long-poll index-tq, trả kết quả", $techn="gRPC", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.chunk_markdown, "Chạy", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.embed_and_upsert, "Chạy", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.cleanup_old_chunks, "Chạy", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.IndexingWorker.chunk_markdown, DocumentIngestionSystem.ObjectStorage, "GET md, PUT chunks", $techn="S3 API", $tags="Relationship", $link="")
@@ -61,8 +63,6 @@ Rel(DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, DocumentIngestionSys
 Rel(DocumentIngestionSystem.IndexingWorker.DocumentIngestionWorkflow, DocumentIngestionSystem.IndexingWorker.update_status, "execute_activity", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.IndexingWorker.ReindexWorkflow, DocumentIngestionSystem.IndexingWorker.update_status, "execute_activity", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.IndexingWorker.update_status, DocumentIngestionSystem.MetadataDB, "UPDATE status", $techn="SQL", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.TemporalServer, "Long-poll index-tq, trả kết quả", $techn="gRPC", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.IndexingWorker.Workerindextq, DocumentIngestionSystem.IndexingWorker.chunk_markdown, "Chạy", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

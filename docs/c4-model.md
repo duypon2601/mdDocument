@@ -36,8 +36,8 @@ Temporal là thành phần bên trong hệ thống (tự host), nên không xu�
 
 | Container | Công nghệ đề xuất | Trách nhiệm |
 |---|---|---|
-| Web UI / CLI | Trang HTML tĩnh do API phục vụ, Typer CLI | Upload, xem tiến độ, duyệt tài liệu, bấm re-index |
-| Ingestion API | FastAPI + `temporalio` client | Cổng vào duy nhất: validate, lưu file gốc, tạo document, start workflow, query tiến độ, gửi signal và cancel |
+| Web UI / CLI | React SPA (thư mục `web/`) build tĩnh vào `packages/api` và do API phục vụ, Typer CLI | Upload, xem tiến độ, duyệt tài liệu, bấm re-index, xem Markdown và chunk, tìm kiếm thử |
+| Ingestion API | FastAPI + `temporalio` client | Cổng vào duy nhất: validate, lưu file gốc, tạo document, start workflow, query tiến độ, gửi signal và cancel. Có thêm `POST /search` (Search Controller) để tìm thử trên Qdrant |
 | Temporal Server | Temporal 1.32.2 self-hosted (PostgreSQL riêng) | Lưu lịch sử workflow, giữ task queue, timer, retry. Temporal Web UI cho quản trị viên xem từng bước, retry, terminate |
 | Conversion Worker | Docling, MarkItDown, PyMuPDF, task queue `convert-tq` | Activity chuyển file sang Markdown. Scale theo CPU/GPU vì OCR nặng |
 | Indexing Worker | Text splitter, embedding client, `qdrant-client`, task queue `ingest-tq` và `index-tq` | Một tiến trình chạy hai `Worker`. Bên `ingest-tq` chạy code workflow và activity `update_status` ghi trạng thái vào Metadata DB. Bên `index-tq` chạy activity chunk, embed, upsert, có giới hạn tốc độ theo rate limit của embedding API |
@@ -172,7 +172,7 @@ Cả workflow đặt `execution_timeout` 6 giờ khi start. Nếu bật bước 
 
 <sub>Ảnh PNG: [`L3-IngestionAPI.png`](architecture/diagrams/L3-IngestionAPI.png) · Nguồn PlantUML: [`L3-IngestionAPI.puml`](architecture/diagrams/L3-IngestionAPI.puml)</sub>
 
-Code nằm ở `packages/api`. Storage Client và Document Repository là `ingest.core.storage` và `ingest.core.db`. API không còn tự đẩy job vào queue. Workflow Client gọi `start_workflow` cho upload mới, `query("get_progress")` khi UI hỏi tiến độ chi tiết, `signal("review_decision")` khi người dùng duyệt, `cancel()` khi huỷ. Danh sách tài liệu vẫn đọc từ Metadata DB, vì Temporal không phải chỗ để lọc và phân trang dữ liệu nghiệp vụ.
+Code nằm ở `packages/api`. Storage Client và Document Repository là `ingest.core.storage` và `ingest.core.db`. API không còn tự đẩy job vào queue. Workflow Client gọi `start_workflow` cho upload mới, `query("get_progress")` khi UI hỏi tiến độ chi tiết, `signal("review_decision")` khi người dùng duyệt, `cancel()` khi huỷ. Danh sách tài liệu vẫn đọc từ Metadata DB, vì Temporal không phải chỗ để lọc và phân trang dữ liệu nghiệp vụ. Search Controller (`POST /search`, `ingest.api.search`) embed câu hỏi bằng cùng model đã index rồi hỏi Qdrant. Package api không import `ingest.index`, nên phần client này được viết lại ở đây. Thiếu cấu hình hoặc Qdrant/embedding không trả lời thì endpoint trả 503.
 
 ### 3.2 Conversion Worker (file → Markdown)
 

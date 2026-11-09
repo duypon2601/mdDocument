@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Diagram - Từ upload file đến lưu vector</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Mermaid.js CDN -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      sequence: {
+        actorMargin: 40,
+        boxMargin: 10,
+        boxTextMargin: 5,
+        noteMargin: 10,
+        messageMargin: 32,
+        mirrorActors: true,
+        useMaxWidth: true
+      }
+    });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-7xl mx-auto space-y-8">
+
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            C4 Model • Level 2 Sequence Flow
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">
+            Từ upload file đến lưu vector
+          </h1>
+          <p class="text-slate-500 mt-1 text-sm sm:text-base">
+            Một tài liệu đi qua <code class="bg-slate-100 px-1 rounded text-xs">POST /documents</code>, <code class="bg-slate-100 px-1 rounded text-xs">DocumentIngestionWorkflow</code> và các activity convert, index cho tới khi vector nằm trong Qdrant và trạng thái là <code class="bg-slate-100 px-1 rounded text-xs">INDEXED</code>. Mỗi participant ghi tên package chạy nó.
+          </p>
+        </div>
+        <div class="flex flex-col gap-2">
+          <span class="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-mono font-medium">ingest-tq: workflow, update_status</span>
+          <span class="px-3 py-1 bg-sky-50 text-sky-700 border border-sky-200 rounded-lg text-xs font-mono font-medium">convert-tq: detect, parse, OCR, finalize</span>
+          <span class="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-mono font-medium">index-tq: chunk, embed, cleanup</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Sequence Diagram Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 overflow-x-auto">
+      <h2 class="text-lg font-bold text-slate-900 mb-6">Sơ đồ tuần tự</h2>
+
+      <div class="mermaid flex justify-center">
+sequenceDiagram
+    autonumber
+    actor U as Người dùng / CLI
+    participant API as Ingestion API (ingest-api)
+    participant S3 as Object Storage (MinIO)
+    participant DB as Metadata DB (PostgreSQL)
+    participant T as Temporal Server
+    participant WF as Workflow (ingest-index, ingest-tq)
+    participant CW as Conversion Worker (ingest-convert, convert-tq)
+    participant OCR as OCR / Vision Model
+    participant IW as Index activity (ingest-index, index-tq)
+    participant EMB as Embedding (bge-m3)
+    participant Q as Vector DB (Qdrant)
+
+    %% Giai đoạn 1: API
+    Note over U, T: GIAI ĐOẠN 1. NHẬN FILE (ingest.api.app)
+    U->>API: POST /documents (file, extract_media, pipeline_version)
+    API->>API: validate_upload: rỗng 400, quá 100 MB 413, MIME không hỗ trợ 415
+    API->>API: compute_doc_id = SHA-256 nội dung (tiền tố legacy- / v1- theo chế độ)
+    API->>DB: get_or_create(doc_id)
+    alt Đã có và không ở FAILED / CANCELLED
+        API-->>U: 200, duplicate = true
+    else Mới, hoặc chạy lại sau FAILED / CANCELLED
+        API->>S3: PUT raw/{doc_id}/{file_name}
+        API->>T: start_workflow(DocumentIngestionWorkflow, IngestInput, id = ingest-{doc_id}, ingest-tq)
+        API-->>U: 202, doc_id, status RECEIVED
+    end
+
+    %% Giai đoạn 2: Convert
+    T->>WF: Workflow task trên ingest-tq
+    Note over WF, OCR: GIAI ĐOẠN 2. CHUYỂN SANG MARKDOWN. Mỗi lời gọi WF tới CW đi qua Temporal (convert-tq)
+    WF->>DB: update_status CONVERTING
+    WF->>CW: detect_format(IngestInput)
+    activate CW
+    CW->>S3: GET raw/{doc_id}/{file_name}
+    CW->>CW: sniff ra kind, liệt kê trang scan hoặc ảnh cần OCR
+    CW-->>WF: FormatInfo(kind, page_count, ocr_page_batches)
+    deactivate CW
+
+    par parse_document
+        WF->>CW: parse_document(IngestInput)
+        CW->>S3: GET raw
+        CW->>CW: Parser theo kind (pdf, docx, pptx, xlsx, html, text)
+        CW->>S3: PUT md-raw/{doc_id}/text.md
+        CW-->>WF: PartResult(page_count)
+    and ocr_pages, mỗi lô một activity (không có lô nào thì bỏ qua)
+        WF->>CW: ocr_pages(OcrBatch)
+        CW->>S3: GET raw
+        CW->>OCR: Đọc chữ từng trang hoặc ảnh (Tesseract / RapidOCR / Vision LLM)
+        OCR-->>CW: Text và độ tin cậy
+        CW->>S3: PUT md-raw/{doc_id}/ocr/{batch}.md
+        CW-->>WF: OcrResult(confidence)
+    end
+
+    opt review_enabled và confidence thấp hơn min_ocr_confidence
+        WF->>DB: update_status NEEDS_REVIEW
+        U->>API: POST /documents/{doc_id}/review?decision=approve
+        API->>T: signal review_decision
+        T->>WF: approve chạy tiếp, reject hoặc quá hạn thì FAILED
+    end
+
+    WF->>CW: finalize_markdown(FinalizeInput)
+    activate CW
+    CW->>S3: GET md-raw/{doc_id}/text.md và ocr/*.md
+    CW->>CW: Ghép theo thứ tự trang, bỏ header/footer lặp, thêm front-matter
+    CW->>S3: PUT md/{doc_id}.md
+    CW-->>WF: FinalizeResult
+    deactivate CW
+    WF->>DB: update_status CONVERTED
+
+    %% Giai đoạn 3: Index
+    Note over WF, Q: GIAI ĐOẠN 3. CHUNK, EMBED, GHI VECTOR (run_index_phase). Lời gọi WF tới IW đi qua Temporal (index-tq)
+    WF->>DB: update_status INDEXING, index_version
+    WF->>IW: chunk_markdown(ChunkInput)
+    activate IW
+    IW->>S3: GET md/{doc_id}.md
+    IW->>IW: Cắt theo heading rồi theo token (512, overlap 64), bảng không bị cắt
+    IW->>S3: PUT chunks/{doc_id}/v{n}/batch-{i}.jsonl (100 chunk mỗi lô)
+    IW-->>WF: ChunkResult(batch_count, chunk_count)
+    deactivate IW
+
+    loop Mỗi batch_index, các lô chạy song song
+        WF->>IW: embed_and_upsert(doc_id, index_version, batch_index)
+        IW->>S3: GET chunks/{doc_id}/v{n}/batch-{i}.jsonl
+        IW->>EMB: Embed các chunk text của lô
+        EMB-->>IW: Vector
+        IW->>Q: Upsert point, id = uuid5(doc_id, index_version, chunk_index), payload text + heading + trang
+        IW-->>WF: EmbedResult(số point)
+    end
+
+    WF->>IW: cleanup_old_chunks(doc_id, index_version)
+    IW->>Q: Xoá point của index_version cũ
+    IW->>S3: Xoá chunks/{doc_id}/ của version cũ
+    WF->>DB: update_status INDEXED, chunk_count, embedding_model
+    Note over WF: Workflow kết thúc Completed
+
+    U->>API: GET /documents/{doc_id}
+    API->>DB: Đọc trạng thái
+    API-->>U: status INDEXED, chunk_count
+      </div>
+    </div>
+
+    <!-- Chi tiết -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">1</span>
+          <h3>Nhận file</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li>Code ở <code class="bg-slate-100 px-1 rounded text-xs">packages/api</code>: <code class="bg-slate-100 px-1 rounded text-xs">app.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">validator.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">dedup.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">workflow_client.py</code>.</li>
+          <li>API trả 202 ngay sau khi start workflow, không chờ xử lý xong. Người dùng hỏi tiến độ bằng <code class="bg-slate-100 px-1 rounded text-xs">GET /documents/{doc_id}</code>.</li>
+          <li>Workflow id <code class="bg-slate-100 px-1 rounded text-xs">ingest-{doc_id}</code> cùng policy <code class="bg-slate-100 px-1 rounded text-xs">ALLOW_DUPLICATE_FAILED_ONLY</code> chặn việc start hai lần cho cùng một file.</li>
+        </ul>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">2</span>
+          <h3>Chuyển sang Markdown</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li>Workflow ở <code class="bg-slate-100 px-1 rounded text-xs">packages/index/.../workflows/ingestion.py</code> chỉ điều phối. Code convert nằm ở <code class="bg-slate-100 px-1 rounded text-xs">packages/convert/.../activities.py</code> và được gọi theo tên qua <code class="bg-slate-100 px-1 rounded text-xs">convert-tq</code>.</li>
+          <li><code class="bg-slate-100 px-1 rounded text-xs">detect_format</code> quyết định có bao nhiêu lô OCR. File html hay text có 0 lô, nên chỉ chạy <code class="bg-slate-100 px-1 rounded text-xs">parse_document</code>.</li>
+          <li>Các bước truyền nhau key trên MinIO, không truyền nội dung file qua Temporal.</li>
+        </ul>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center gap-2 text-indigo-600 font-semibold mb-3">
+          <span class="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm">3</span>
+          <h3>Chunk, embed, ghi vector</h3>
+        </div>
+        <ul class="space-y-2 text-sm text-slate-600">
+          <li>Code ở <code class="bg-slate-100 px-1 rounded text-xs">packages/index</code>: <code class="bg-slate-100 px-1 rounded text-xs">activities.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">chunking.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">embedder.py</code>, <code class="bg-slate-100 px-1 rounded text-xs">vectorstore.py</code>.</li>
+          <li><code class="bg-slate-100 px-1 rounded text-xs">embed_and_upsert</code> tự đọc lô chunk từ MinIO và ghi thẳng vào Qdrant, nên vector không đi qua Temporal.</li>
+          <li>Point id sinh từ <code class="bg-slate-100 px-1 rounded text-xs">uuid5</code>, nên retry một lô không tạo bản trùng.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-sm text-slate-600">
+      Activity nào lỗi hết số lần retry thì workflow ghi <code class="bg-slate-100 px-1 rounded text-xs">FAILED</code> kèm mã lỗi. Huỷ bằng <code class="bg-slate-100 px-1 rounded text-xs">POST /documents/{doc_id}/cancel</code> thì ghi <code class="bg-slate-100 px-1 rounded text-xs">CANCELLED</code>. Timeout và retry của từng activity xem bảng trong <a class="text-indigo-600 underline" href="../c4-model.md">c4-model.md</a>. Chi tiết riêng cho giai đoạn 2 và 3 xem <a class="text-indigo-600 underline" href="sequence_phase2.html">sequence_phase2.html</a> và <a class="text-indigo-600 underline" href="sequence_phase3.html">sequence_phase3.html</a>.
+    </div>
+
+    <footer class="text-center text-xs text-slate-400 py-4">
+      Document Ingestion System • Từ upload đến vector
+    </footer>
+
+  </div>
+</body>
+</html>

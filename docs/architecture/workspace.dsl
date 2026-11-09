@@ -16,11 +16,12 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
         // ---------- Hệ thống đang thiết kế ----------
         dis = softwareSystem "Document Ingestion System" "Nhận tài liệu, chuyển sang Markdown, chia chunk, tạo embedding và lưu vào Vector DB" {
 
-            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, bấm re-index" "Trang HTML tĩnh do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)" "WebBrowser"
+            webui = container "Web UI / CLI" "Upload, xem tiến độ, duyệt tài liệu, bấm re-index, xem Markdown và chunk, tìm kiếm thử" "React SPA (thư mục web/, build tĩnh vào packages/api) do ingest-api phục vụ ở GET /, Typer CLI (package ingest-cli)" "WebBrowser"
 
             api = container "Ingestion API" "Nhận file, kiểm tra, lưu bản gốc, khởi động workflow, trả trạng thái" "Package ingest-api (packages/api). Python, FastAPI, temporalio client" {
                 uploadCtl = component "Upload Controller" "POST /documents (multipart), POST /documents/batch" "FastAPI, ingest.api.app"
-                statusCtl = component "Status Controller" "GET /documents, GET /documents/{id}, GET /documents/{id}/markdown, POST /documents/{id}/review, /reindex, /cancel" "FastAPI, ingest.api.app"
+                statusCtl = component "Status Controller" "GET /documents, GET /documents/{id}, GET /documents/{id}/markdown, /chunks, /raw, GET /stats, POST /documents/{id}/review, /reindex, /cancel, POST /documents/cancel-running" "FastAPI, ingest.api.app"
+                searchCtl = component "Search Controller" "POST /search: embed câu hỏi rồi tìm top_k chunk trong Qdrant, có thể lọc theo doc_id. Trả 503 khi chưa cấu hình hoặc Qdrant/embedding không tới được" "FastAPI, ingest.api.app, ingest.api.search"
                 validator = component "File Validator" "Kiểm tra MIME thật, dung lượng, định dạng hỗ trợ" "python-magic, ingest.api.validator"
                 dedup = component "Dedup Service" "Tính SHA-256, doc_id sinh từ hash (thêm tiền tố legacy-/v1- theo chế độ) nên file trùng không tạo job mới" "hashlib, ingest.api.dedup"
                 storageCli = component "Storage Client" "Ghi file gốc vào raw/{doc_id}/, đọc md/{doc_id}.md" "boto3, ingest.core.storage" "Core"
@@ -91,13 +92,16 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
         // ---------- Level 3: Ingestion API ----------
         webui -> uploadCtl "Upload file" "REST"
         webui -> statusCtl "Xem tiến độ, duyệt, re-index, huỷ" "REST"
+        webui -> searchCtl "Tìm kiếm thử" "REST"
+        searchCtl -> embed "Embed câu hỏi" "HTTPS"
+        searchCtl -> vectordb "Tìm vector" "gRPC"
         uploadCtl -> validator "Validate"
         uploadCtl -> dedup "Tính doc_id"
         uploadCtl -> storageCli "Lưu file"
         uploadCtl -> docRepo "get_or_create theo doc_id, cập nhật trạng thái"
         uploadCtl -> wfClient "Khởi động ingestion"
         statusCtl -> docRepo "Đọc trạng thái, liệt kê, lọc"
-        statusCtl -> storageCli "Đọc Markdown cuối"
+        statusCtl -> storageCli "Đọc Markdown cuối, chunk JSONL, file gốc"
         statusCtl -> wfClient "Query tiến độ, signal duyệt, cancel, start reindex"
         storageCli -> objstore "PUT raw, GET md" "S3 API"
         docRepo -> metadb "Đọc / ghi" "SQL"

@@ -44,6 +44,10 @@ System_Boundary("DocumentIngestionSystem_boundary", "Document Ingestion System",
   ContainerDb(DocumentIngestionSystem.ObjectStorage, "Object Storage", $techn="MinIO / S3", $descr="File gốc, Markdown trung gian và cuối, chunk JSONL, ảnh trích xuất", $tags="Container,Database", $link="")
 }
 
+Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.HTMLTextParser, "HTML / TXT / CSV", $techn="", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, DocumentIngestionSystem.ObjectStorage, "GET raw, PUT md-raw/ocr", $techn="S3 API", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, OCRVisionModel, "OCR từng trang", $techn="HTTPS / local", $tags="Relationship", $link="")
+Rel(DocumentIngestionSystem.ConversionWorker.finalize_markdown, DocumentIngestionSystem.ObjectStorage, "GET md-raw, PUT md", $techn="S3 API", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.TemporalServer, "Long-poll convert-tq, heartbeat, trả kết quả", $techn="gRPC", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.detect_format, "Chạy", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.ConversionWorker.Workerconverttq, DocumentIngestionSystem.ConversionWorker.parse_document, "Chạy", $techn="", $tags="Relationship", $link="")
@@ -53,10 +57,6 @@ Rel(DocumentIngestionSystem.ConversionWorker.detect_format, DocumentIngestionSys
 Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ObjectStorage, "GET raw, PUT md-raw", $techn="S3 API", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.PDFParser, "PDF", $techn="", $tags="Relationship", $link="")
 Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.OfficeParser, "DOCX / PPTX / XLSX", $techn="", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.ConversionWorker.parse_document, DocumentIngestionSystem.ConversionWorker.HTMLTextParser, "HTML / TXT / CSV", $techn="", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, DocumentIngestionSystem.ObjectStorage, "GET raw, PUT md-raw/ocr", $techn="S3 API", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.ConversionWorker.ocr_pages, OCRVisionModel, "OCR từng trang", $techn="HTTPS / local", $tags="Relationship", $link="")
-Rel(DocumentIngestionSystem.ConversionWorker.finalize_markdown, DocumentIngestionSystem.ObjectStorage, "GET md-raw, PUT md", $techn="S3 API", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

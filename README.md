@@ -58,6 +58,34 @@ uv run ingest cancel <id>
 
 `review` dùng khi workflow đang chờ ở trạng thái NEEDS_REVIEW (bật bằng `INGEST_REVIEW_ENABLED=true`).
 
+## Giao diện web
+
+Giao diện là React SPA trong `web/`. API phục vụ bản build ở `/` (các route `/files`, `/files/<doc_id>`, `/search` cũng trả về SPA). Chưa build thì `/` rơi về trang tĩnh cũ `static/index.html`.
+
+```bash
+cd web
+npm install
+npm run build     # ra packages/api/src/ingest/api/static/dist, rồi mở http://localhost:8000
+npm run dev       # Vite dev server, proxy các lời gọi API sang localhost:8000
+npm test          # vitest
+npm run lint && npm run typecheck
+```
+
+Image Docker target `api` tự build `web/` ở stage riêng nên không cần chạy `npm run build` trước.
+
+Màn hình gồm Tổng quan, Tài liệu (upload ba kiểu xử lý v2, v1, bản cũ; lọc; Re-index; Dừng), trang chi tiết (timeline, Markdown, Chunk, Thông tin, Duyệt/Từ chối khi chờ review) và Tìm kiếm thử.
+
+## Endpoint API
+
+| Endpoint | Việc |
+|---|---|
+| `POST /documents`, `POST /documents/batch` | Upload (form `pipeline_version`, `extract_media`) |
+| `GET /documents`, `GET /documents/{id}`, `GET /stats` | Danh sách, chi tiết kèm tiến độ, số liệu tổng quan |
+| `GET /documents/{id}/markdown`, `/chunks`, `/raw` | Markdown cuối, chunk (phân trang, chọn `version`), tải file gốc |
+| `POST /documents/{id}/review?decision=approve\|reject`, `/reindex`, `/cancel` | Duyệt, re-index, dừng một tài liệu |
+| `POST /documents/cancel-running` | Dừng mọi tài liệu đang chạy |
+| `POST /search` | Tìm thử: `{query, top_k, doc_id?}`, trả 503 khi Qdrant hoặc embedding không sẵn sàng |
+
 ## Test
 
 ```bash
