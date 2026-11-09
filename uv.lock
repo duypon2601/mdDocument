@@ -729,18 +729,22 @@ version = "0.1.0"
 source = { editable = "packages/api" }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "ingest-core" },
     { name = "python-magic" },
     { name = "python-multipart" },
+    { name = "qdrant-client" },
     { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "ingest-core", editable = "packages/core" },
     { name = "python-magic" },
     { name = "python-multipart" },
+    { name = "qdrant-client" },
     { name = "uvicorn" },
 ]
 
