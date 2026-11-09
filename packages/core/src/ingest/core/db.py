@@ -147,7 +147,7 @@ class DocumentRepository:
 
     def list(
         self,
-        status: str | None = None,
+        status: str | list[str] | None = None,
         q: str | None = None,
         limit: int = 20,
         offset: int = 0,
@@ -156,8 +156,10 @@ class DocumentRepository:
             stmt = select(Document)
             cnt = select(func.count()).select_from(Document)
             if status:
-                stmt = stmt.where(Document.status == status)
-                cnt = cnt.where(Document.status == status)
+                if isinstance(status, str):
+                    status = [status]
+                stmt = stmt.where(Document.status.in_(status))
+                cnt = cnt.where(Document.status.in_(status))
             if q:
                 like = f"%{q}%"
                 stmt = stmt.where(Document.file_name.ilike(like))
@@ -165,6 +167,19 @@ class DocumentRepository:
             stmt = stmt.order_by(Document.created_at.desc(), Document.doc_id).limit(limit)
             stmt = stmt.offset(offset)
             return [_rec(d) for d in s.scalars(stmt)], s.scalar(cnt) or 0
+
+    def stats(self) -> tuple[int, int, dict[str, int]]:
+        """(tổng tài liệu, tổng chunk, đếm theo status đủ mọi khoá STATUSES)."""
+        with self._sm() as s:
+            rows = s.execute(
+                select(
+                    Document.status, func.count(), func.coalesce(func.sum(Document.chunk_count), 0)
+                ).group_by(Document.status)
+            ).all()
+        by_status = dict.fromkeys(STATUSES, 0)
+        for st, n, _ in rows:
+            by_status[st] = n
+        return sum(n for _, n, _ in rows), sum(int(c) for _, _, c in rows), by_status
 
 
 def session_factory(url: str) -> DocumentRepository:
