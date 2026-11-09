@@ -6,9 +6,12 @@ import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorState } from '../../components/ErrorState'
+import { Skeleton } from '../../components/Skeleton'
 import { errText, useDocActions } from '../../hooks/useDocActions'
+import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { RUNNING_STATUSES } from '../../lib/status'
 import { DocumentTable } from './DocumentTable'
+import { StopAllButton } from '../../components/StopAllButton'
 import { UploadPanel } from './UploadPanel'
 
 export const PAGE_SIZE = 20
@@ -24,6 +27,7 @@ const TABS: { key: string; label: string; status?: Status[] }[] = [
 ]
 
 export function FilesPage() {
+  useDocumentTitle('Tài liệu')
   const [sp, setSp] = useSearchParams()
   const tab = TABS.find((t) => t.key === (sp.get('status') ?? '')) ?? TABS[0]
   const q = sp.get('q') ?? ''
@@ -99,6 +103,7 @@ export function FilesPage() {
             </button>
           ))}
         </div>
+        {tab.key === 'running' && <StopAllButton />}
         <input
           type="search"
           value={text}
@@ -112,7 +117,7 @@ export function FilesPage() {
       {list.isError && !list.data ? (
         <ErrorState detail={errText(list.error)} onRetry={() => list.refetch()} />
       ) : list.isPending ? (
-        <p className="py-8 text-center text-muted">Đang tải…</p>
+        <Skeleton rows={5} />
       ) : list.data.items.length === 0 ? (
         <EmptyState title={filtered ? 'Không có tài liệu phù hợp' : 'Chưa có tài liệu nào'}>
           {filtered ? 'Thử đổi bộ lọc hoặc từ khoá.' : 'Tải file lên ở khung phía trên.'}

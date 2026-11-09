@@ -164,6 +164,16 @@ describe('nút trên dòng', () => {
   })
 })
 
+describe('Dừng tất cả ở tab Đang chạy', () => {
+  it('chỉ hiện ở tab Đang chạy', async () => {
+    at()
+    await screen.findByText('loi.pdf')
+    expect(screen.queryByRole('button', { name: 'Dừng tất cả đang chạy' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Đang chạy' }))
+    expect(await screen.findByRole('button', { name: 'Dừng tất cả đang chạy' })).toBeInTheDocument()
+  })
+})
+
 describe('upload', () => {
   const pdf = () => new File(['x'], 'moi.pdf', { type: 'application/pdf' })
   const created = { ...doc('e'.repeat(64), 'moi.pdf', 'RECEIVED') }

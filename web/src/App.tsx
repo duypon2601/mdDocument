@@ -1,12 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { lazy } from 'react'
 import { Route, Routes } from 'react-router'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { NotFoundPage } from './pages/NotFound'
-import { FilesPage } from './pages/files/FilesPage'
-import { DocumentPage } from './pages/document/DocumentPage'
-import { DashboardPage } from './pages/Placeholder'
-import { SearchPage } from './pages/search/SearchPage'
+
+// Mỗi trang là một chunk riêng để bundle chính nhỏ (DocumentPage kéo theo react-markdown).
+const DashboardPage = lazy(() =>
+  import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+)
+const FilesPage = lazy(() => import('./pages/files/FilesPage').then((m) => ({ default: m.FilesPage })))
+const DocumentPage = lazy(() =>
+  import('./pages/document/DocumentPage').then((m) => ({ default: m.DocumentPage })),
+)
+const SearchPage = lazy(() => import('./pages/search/SearchPage').then((m) => ({ default: m.SearchPage })))
 
 export function makeQueryClient() {
   return new QueryClient({

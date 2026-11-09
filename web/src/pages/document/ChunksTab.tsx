@@ -4,6 +4,7 @@ import type { Chunk, DocumentDetail } from '../../api/types'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorState } from '../../components/ErrorState'
+import { Skeleton } from '../../components/Skeleton'
 import { errText } from '../../hooks/useDocActions'
 import { headingText, pageRange } from '../../lib/highlight'
 
@@ -46,7 +47,7 @@ export function ChunksTab({ doc }: { doc: DocumentDetail }) {
   )
   const header = current > 1 ? <div className="mb-3">{select}</div> : null
 
-  if (q.isPending) return <p className="py-8 text-center text-muted">Đang tải…</p>
+  if (q.isPending) return <Skeleton rows={4} />
   if (q.isError) {
     if ((q.error as { status?: number }).status === 404) {
       return (

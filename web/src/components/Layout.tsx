@@ -1,4 +1,8 @@
-import { NavLink, Outlet } from 'react-router'
+import { Suspense } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router'
+import { ConnectionBanner } from './ConnectionBanner'
+import { RouteErrorBoundary } from './RouteErrorBoundary'
+import { Skeleton } from './Skeleton'
 
 const LINKS = [
   { to: '/', label: 'Tổng quan', end: true },
@@ -7,8 +11,16 @@ const LINKS = [
 ]
 
 export function Layout() {
+  const { pathname } = useLocation()
   return (
     <div className="min-h-dvh">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
+      >
+        Bỏ qua điều hướng
+      </a>
+      <ConnectionBanner />
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2">
           <span className="font-semibold">Ingestion</span>
@@ -30,8 +42,12 @@ export function Layout() {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <Outlet />
+      <main id="main" className="mx-auto max-w-6xl px-4 py-6">
+        <RouteErrorBoundary resetKey={pathname}>
+          <Suspense fallback={<Skeleton rows={4} />}>
+            <Outlet />
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
     </div>
   )

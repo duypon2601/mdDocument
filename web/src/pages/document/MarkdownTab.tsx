@@ -6,6 +6,7 @@ import { useMarkdown } from '../../api/hooks'
 import type { DocumentDetail } from '../../api/types'
 import { Button } from '../../components/Button'
 import { ErrorState } from '../../components/ErrorState'
+import { Skeleton } from '../../components/Skeleton'
 import { stripFrontMatter } from '../../lib/markdown'
 import { errText } from '../../hooks/useDocActions'
 
@@ -17,7 +18,7 @@ export function MarkdownTab({ doc }: { doc: DocumentDetail }) {
   const [raw, setRaw] = useState(false)
 
   if (waiting) return <Note>Markdown sẽ hiện khi chuyển đổi xong.</Note>
-  if (md.isPending) return <p className="py-6 text-muted">Đang tải Markdown…</p>
+  if (md.isPending) return <Skeleton rows={6} label="Đang tải Markdown…" />
   if (md.isError) {
     const missing = (md.error as { status?: number }).status === 404
     if (!missing) return <ErrorState detail={errText(md.error)} onRetry={() => md.refetch()} />

@@ -2,9 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useDocuments, useSearch } from '../../api/hooks'
 import type { SearchHit } from '../../api/types'
+import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { Button } from '../../components/Button'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorState } from '../../components/ErrorState'
+import { Skeleton } from '../../components/Skeleton'
 import { errText } from '../../hooks/useDocActions'
 import { headingText, pageRange, splitHighlight } from '../../lib/highlight'
 
@@ -12,6 +14,7 @@ const TOP_K = [5, 8, 20] as const
 const DEFAULT_K = 8
 
 export function SearchPage() {
+  useDocumentTitle('Tìm kiếm thử')
   const [sp, setSp] = useSearchParams()
   const query = (sp.get('q') ?? '').trim()
   const docId = sp.get('doc_id') ?? ''
@@ -99,7 +102,7 @@ export function SearchPage() {
             Kết quả là các chunk gần nghĩa nhất, xếp theo điểm.
           </EmptyState>
         ) : search.isPending ? (
-          <p className="py-8 text-center text-muted">Đang tìm…</p>
+          <Skeleton rows={3} label="Đang tìm…" />
         ) : search.isError ? (
           (search.error as { status?: number }).status === 503 ? (
             <ErrorState

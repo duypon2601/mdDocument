@@ -7,9 +7,11 @@ import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorState } from '../../components/ErrorState'
+import { Skeleton } from '../../components/Skeleton'
 import { StatusPill } from '../../components/StatusPill'
 import { useToast } from '../../components/Toast'
 import { errText, useDocActions } from '../../hooks/useDocActions'
+import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { PROFILE_LABEL, profileOf } from '../../lib/profile'
 import { isRunning } from '../../lib/status'
 import { ChunksTab } from './ChunksTab'
@@ -27,8 +29,9 @@ type TabKey = (typeof TABS)[number]['key']
 export function DocumentPage() {
   const { docId } = useParams()
   const doc = useDocument(docId)
+  useDocumentTitle(doc.data?.file_name ?? 'Tài liệu')
 
-  if (doc.isPending) return <p className="py-8 text-center text-muted">Đang tải…</p>
+  if (doc.isPending) return <Skeleton rows={4} />
   if (doc.isError) {
     if ((doc.error as { status?: number }).status === 404) {
       return (
