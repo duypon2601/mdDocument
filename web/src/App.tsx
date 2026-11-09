@@ -4,7 +4,8 @@ import { Layout } from './components/Layout'
 import { ToastProvider } from './components/Toast'
 import { NotFoundPage } from './pages/NotFound'
 import { FilesPage } from './pages/files/FilesPage'
-import { DashboardPage, DocumentPage, SearchPage } from './pages/Placeholder'
+import { DocumentPage } from './pages/document/DocumentPage'
+import { DashboardPage, SearchPage } from './pages/Placeholder'
 
 export function makeQueryClient() {
   return new QueryClient({
