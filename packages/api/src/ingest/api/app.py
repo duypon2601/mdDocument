@@ -3,12 +3,15 @@
 Mọi phụ thuộc (storage, repo, workflow client, settings) được tiêm qua create_app.
 """
 
+import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from ingest.api.dedup import compute_doc_id, is_legacy, profile_of
@@ -22,6 +25,7 @@ from ingest.core.storage import Storage
 
 RUNNING_STATUSES = frozenset({"RECEIVED", "CONVERTING", "NEEDS_REVIEW", "CONVERTED", "INDEXING"})
 RESTARTABLE_STATUSES = frozenset({"FAILED", "CANCELLED"})
+_BATCH_RE = re.compile(r"batch-(\d+)\.jsonl$")
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
 
 
@@ -130,15 +134,43 @@ def create_app(
         limit: int = Query(20, ge=1, le=200),
         offset: int = Query(0, ge=0),
     ) -> dict:
-        if status is not None and status not in STATUSES:
-            raise HTTPException(422, f"status không hợp lệ: {status}")
-        items, total = repo.list(status=status, q=q, limit=limit, offset=offset)
+        wanted = [x.strip() for x in status.split(",") if x.strip()] if status else None
+        for st in wanted or []:
+            if st not in STATUSES:
+                raise HTTPException(422, f"status không hợp lệ: {st}")
+        items, total = repo.list(status=wanted, q=q, limit=limit, offset=offset)
         return {
             "items": [_doc_json(r) for r in items],
             "total": total,
             "limit": limit,
             "offset": offset,
         }
+
+    @app.get("/stats")
+    def stats() -> dict:
+        total, chunks, by_status = repo.stats()
+        return {"total": total, "chunks": chunks, "by_status": by_status}
+
+    @app.post("/documents/cancel-running", status_code=202)
+    async def cancel_running() -> dict:
+        requested: list[str] = []
+        failed: list[dict] = []
+        running = list(RUNNING_STATUSES)
+        # Gom danh sách trước, tránh phân trang lệch khi trạng thái đổi giữa chừng
+        recs, offset = [], 0
+        while True:
+            page, total = repo.list(status=running, limit=200, offset=offset)
+            recs += page
+            offset += 200
+            if offset >= total:
+                break
+        for rec in recs:
+            try:
+                await wf.cancel(rec.doc_id, _wid(rec))
+                requested.append(rec.doc_id)
+            except Exception as exc:
+                failed.append({"doc_id": rec.doc_id, "detail": str(exc) or type(exc).__name__})
+        return {"requested": requested, "failed": failed}
 
     def _must_get(doc_id: str) -> DocumentRecord:
         rec = repo.get(doc_id)
@@ -176,6 +208,48 @@ def create_app(
         return PlainTextResponse(
             storage.get(key).decode("utf-8"), media_type="text/markdown; charset=utf-8"
         )
+
+    @app.get("/documents/{doc_id}/raw")
+    def get_raw(doc_id: str) -> Response:
+        """Tải file gốc đã upload."""
+        rec = _must_get(doc_id)
+        key = keys.raw_key(doc_id, rec.file_name)
+        if not storage.exists(key):
+            raise HTTPException(404, "Không có file gốc")
+        return Response(
+            storage.get(key),
+            media_type=rec.mime or "application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(rec.file_name)}"},
+        )
+
+    @app.get("/documents/{doc_id}/chunks")
+    def get_chunks(
+        doc_id: str,
+        version: int | None = Query(None, ge=1),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+    ) -> dict:
+        rec = _must_get(doc_id)
+        ver = version if version is not None else rec.index_version
+        batches = []
+        for k in storage.list_keys(f"chunks/{doc_id}/v{ver}/"):
+            m = _BATCH_RE.search(k)
+            if m:
+                batches.append((int(m.group(1)), k))
+        if not batches:
+            raise HTTPException(404, f"Không có chunk của version {ver}")
+        rows = []
+        for _, k in sorted(batches):
+            rows += [json.loads(ln) for ln in storage.get(k).decode("utf-8").splitlines() if ln]
+        rows.sort(key=lambda r: r["chunk_index"])
+        return {
+            "doc_id": doc_id,
+            "index_version": ver,
+            "total": len(rows),
+            "offset": offset,
+            "limit": limit,
+            "items": rows[offset : offset + limit],
+        }
 
     @app.post("/documents/{doc_id}/review")
     async def review(doc_id: str, decision: Literal["approve", "reject"] = Query(...)) -> dict:

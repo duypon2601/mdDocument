@@ -319,3 +319,123 @@ def test_legacy_mode_gets_own_doc_id_and_flag(env):
     assert [i.extract_media for i in wf.ingests] == [True, False]
     items = {d["doc_id"]: d["extract_media"] for d in client.get("/documents").json()["items"]}
     assert items == {new["doc_id"]: True, old["doc_id"]: False}
+
+
+def test_list_multiple_statuses(env):
+    client, _, repo, _ = env
+    ids = [up(client, f"{i}.pdf", make_pdf([f"s{i}"])).json()["doc_id"] for i in range(3)]
+    repo.set_status(ids[0], "INDEXED")
+    repo.set_status(ids[1], "FAILED", error_code="X")
+    r = client.get("/documents?status=INDEXED,FAILED").json()
+    assert r["total"] == 2 and {d["doc_id"] for d in r["items"]} == set(ids[:2])
+    assert client.get("/documents?status=RECEIVED").json()["total"] == 1
+    assert client.get("/documents?status=INDEXED,NOPE").status_code == 422
+
+
+def test_stats_has_all_statuses(env):
+    from ingest.core.db import STATUSES
+
+    client, _, repo, _ = env
+    assert client.get("/stats").json() == {
+        "total": 0,
+        "chunks": 0,
+        "by_status": dict.fromkeys(STATUSES, 0),
+    }
+    a = up(client, "a.pdf", make_pdf(["a"])).json()["doc_id"]
+    b = up(client, "b.pdf", make_pdf(["b"])).json()["doc_id"]
+    up(client, "c.pdf", make_pdf(["c"]))
+    repo.set_status(a, "INDEXED", chunk_count=10)
+    repo.set_status(b, "INDEXED", chunk_count=5)
+    body = client.get("/stats").json()
+    assert body["total"] == 3 and body["chunks"] == 15
+    assert body["by_status"]["INDEXED"] == 2 and body["by_status"]["RECEIVED"] == 1
+    assert body["by_status"]["CANCELLED"] == 0 and len(body["by_status"]) == len(STATUSES)
+
+
+def test_raw_download(env):
+    client, *_ = env
+    data = make_pdf(["gốc"])
+    doc_id = up(client, "báo cáo.pdf", data).json()["doc_id"]
+    r = client.get(f"/documents/{doc_id}/raw")
+    assert r.status_code == 200 and r.content == data
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.headers["content-disposition"] == (
+        "attachment; filename*=UTF-8''b%C3%A1o%20c%C3%A1o.pdf"
+    )
+    assert client.get("/documents/khong-co/raw").status_code == 404
+
+
+def test_raw_missing_file_is_404(env):
+    client, _, repo, _ = env
+    repo.get_or_create("d1", "x.pdf", "application/pdf", 1)
+    assert client.get("/documents/d1/raw").status_code == 404
+
+
+def _put_chunks(storage, doc_id, version, n_batches, per=2):
+    import json
+
+    i = 0
+    for b in range(n_batches):
+        rows = []
+        for _ in range(per):
+            rows.append(
+                {
+                    "chunk_index": i,
+                    "text": f"đoạn {i}",
+                    "heading_path": "H",
+                    "page_start": 1,
+                    "page_end": 1,
+                    "content_hash": f"h{i}",
+                }
+            )
+            i += 1
+        body = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n"
+        storage.put(keys.chunk_batch_key(doc_id, version, b), body.encode())
+
+
+def test_chunks_numeric_batch_order_and_paging(env):
+    client, storage, repo, _ = env
+    repo.get_or_create("d1", "x.pdf")
+    repo.set_status("d1", "INDEXED", index_version=1)
+    _put_chunks(storage, "d1", 1, 12)  # batch-10, batch-11 phải đứng sau batch-9
+    r = client.get("/documents/d1/chunks?limit=200").json()
+    assert r["total"] == 24 and r["index_version"] == 1
+    assert [c["chunk_index"] for c in r["items"]] == list(range(24))
+    assert r["items"][3]["text"] == "đoạn 3"
+    p = client.get("/documents/d1/chunks?offset=20&limit=3").json()
+    assert [c["chunk_index"] for c in p["items"]] == [20, 21, 22]
+    assert (p["offset"], p["limit"], p["total"]) == (20, 3, 24)
+    assert client.get("/documents/d1/chunks?limit=201").status_code == 422
+
+
+def test_chunks_version_and_404(env):
+    client, storage, repo, _ = env
+    repo.get_or_create("d1", "x.pdf")
+    assert client.get("/documents/d1/chunks").status_code == 404
+    _put_chunks(storage, "d1", 1, 1)
+    _put_chunks(storage, "d1", 2, 2)
+    repo.set_status("d1", "INDEXED", index_version=2)
+    assert client.get("/documents/d1/chunks").json()["total"] == 4  # mặc định = index_version
+    assert client.get("/documents/d1/chunks?version=1").json()["total"] == 2
+    assert client.get("/documents/d1/chunks?version=3").status_code == 404
+    assert client.get("/documents/khong-co/chunks").status_code == 404
+
+
+def test_cancel_running_isolates_failures(env):
+    client, _, repo, wf = env
+    ids = [up(client, f"{i}.pdf", make_pdf([f"r{i}"])).json()["doc_id"] for i in range(4)]
+    repo.set_status(ids[0], "INDEXING")
+    repo.set_status(ids[1], "INDEXED")  # không chạy, bỏ qua
+    orig = wf.cancel
+
+    async def flaky(doc_id, workflow_id=None):
+        if doc_id == ids[2]:
+            raise RuntimeError("temporal down")
+        await orig(doc_id, workflow_id)
+
+    wf.cancel = flaky
+    r = client.post("/documents/cancel-running")
+    assert r.status_code == 202
+    body = r.json()
+    assert set(body["requested"]) == {ids[0], ids[3]}
+    assert body["failed"] == [{"doc_id": ids[2], "detail": "temporal down"}]
