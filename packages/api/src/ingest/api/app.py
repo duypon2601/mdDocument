@@ -11,10 +11,14 @@ from typing import Literal
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from httpx import HTTPError
+from pydantic import BaseModel, Field
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from ingest.api.dedup import compute_doc_id, is_legacy, profile_of
+from ingest.api.search import QdrantSearcher, Searcher, SearchUnavailable
 from ingest.api.validator import ValidationError, safe_name, validate_upload
 from ingest.api.workflow_client import WorkflowClient, active_workflow_id
 from ingest.core import keys
@@ -27,6 +31,12 @@ RUNNING_STATUSES = frozenset({"RECEIVED", "CONVERTING", "NEEDS_REVIEW", "CONVERT
 RESTARTABLE_STATUSES = frozenset({"FAILED", "CANCELLED"})
 _BATCH_RE = re.compile(r"batch-(\d+)\.jsonl$")
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    top_k: int = Field(8, ge=1, le=50)
+    doc_id: str | None = None
 
 
 def _doc_json(r: DocumentRecord) -> dict:
@@ -43,6 +53,7 @@ def create_app(
     repo: DocumentRepository,
     wf: WorkflowClient,
     settings: Settings | None = None,
+    searcher: Searcher | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     app = FastAPI(title="Ingestion API")
@@ -286,7 +297,21 @@ def create_app(
         await wf.cancel(doc_id, _wid(rec))
         return {"doc_id": doc_id, "cancel_requested": True}
 
+    @app.post("/search")
+    async def search(body: SearchRequest) -> JSONResponse:
+        if searcher is None:
+            return _search_unavailable("Chưa cấu hình tìm kiếm")
+        try:
+            out = await run_in_threadpool(searcher.search, body.query, body.top_k, body.doc_id)
+        except (SearchUnavailable, HTTPError) as exc:
+            return _search_unavailable(str(exc))
+        return JSONResponse(out)
+
     return app
+
+
+def _search_unavailable(detail: str) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"code": "SEARCH_UNAVAILABLE", "detail": detail})
 
 
 def create_default_app() -> FastAPI:
@@ -300,7 +325,16 @@ def create_default_app() -> FastAPI:
     storage.ensure_bucket()
     repo = session_factory(s.database_url)
     wf = _LazyWorkflowClient(s.temporal_address, s.temporal_namespace, s.ingest_tq)
-    return create_app(storage, repo, wf, s)
+    from qdrant_client import QdrantClient
+
+    searcher = QdrantSearcher(
+        QdrantClient(url=s.qdrant_url),
+        s.qdrant_collection,
+        s.embed_base_url,
+        s.embed_api_key,
+        s.embed_model,
+    )
+    return create_app(storage, repo, wf, s, searcher)
 
 
 class _LazyWorkflowClient:

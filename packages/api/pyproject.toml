@@ -9,6 +9,8 @@ dependencies = [
   "uvicorn",
   "python-multipart",
   "python-magic",
+  "httpx",
+  "qdrant-client",
 ]
 
 [project.scripts]
