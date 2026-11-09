@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { ApiError } from '../../api/client'
-import { useCancel, useDocuments, useReindex } from '../../api/hooks'
+import { useDocuments } from '../../api/hooks'
 import type { Document, ListParams, Status } from '../../api/types'
 import { Button } from '../../components/Button'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { EmptyState } from '../../components/EmptyState'
 import { ErrorState } from '../../components/ErrorState'
-import { useToast } from '../../components/Toast'
+import { errText, useDocActions } from '../../hooks/useDocActions'
 import { RUNNING_STATUSES } from '../../lib/status'
 import { DocumentTable } from './DocumentTable'
 import { UploadPanel } from './UploadPanel'
@@ -24,13 +23,8 @@ const TABS: { key: string; label: string; status?: Status[] }[] = [
   { key: 'CANCELLED', label: 'Đã huỷ', status: ['CANCELLED'] },
 ]
 
-function errText(e: unknown): string {
-  return e instanceof ApiError ? e.detail : 'Không gọi được API'
-}
-
 export function FilesPage() {
   const [sp, setSp] = useSearchParams()
-  const toast = useToast()
   const tab = TABS.find((t) => t.key === (sp.get('status') ?? '')) ?? TABS[0]
   const q = sp.get('q') ?? ''
   const page = Math.max(1, Number.parseInt(sp.get('page') ?? '1', 10) || 1)
@@ -71,36 +65,14 @@ export function FilesPage() {
     offset: (page - 1) * PAGE_SIZE,
   }
   const list = useDocuments(params)
-  const cancel = useCancel()
-  const reindex = useReindex()
+  const actions = useDocActions()
   const [stopping, setStopping] = useState<Document | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
 
-  async function confirmStop() {
+  function confirmStop() {
     const d = stopping
     if (!d) return
     setStopping(null)
-    setBusyId(d.doc_id)
-    try {
-      await cancel.mutateAsync(d.doc_id)
-      toast.show(`Đã gửi yêu cầu dừng ${d.file_name}`, 'success')
-    } catch (e) {
-      toast.show(`Không dừng được ${d.file_name}: ${errText(e)}`, 'error')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function doReindex(d: Document) {
-    setBusyId(d.doc_id)
-    try {
-      await reindex.mutateAsync(d.doc_id)
-      toast.show(`Đã yêu cầu re-index ${d.file_name}`, 'success')
-    } catch (e) {
-      toast.show(`Không re-index được ${d.file_name}: ${errText(e)}`, 'error')
-    } finally {
-      setBusyId(null)
-    }
+    void actions.stop(d)
   }
 
   const total = list.data?.total ?? 0
@@ -149,9 +121,9 @@ export function FilesPage() {
         <>
           <DocumentTable
             items={list.data.items}
-            busyId={busyId}
+            busyId={actions.busyId}
             onStop={setStopping}
-            onReindex={doReindex}
+            onReindex={actions.reindex}
           />
           <nav
             aria-label="Phân trang"
