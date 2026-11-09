@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from ingest.api.dedup import compute_doc_id, is_legacy, profile_of
@@ -23,6 +24,7 @@ from ingest.core.storage import Storage
 RUNNING_STATUSES = frozenset({"RECEIVED", "CONVERTING", "NEEDS_REVIEW", "CONVERTED", "INDEXING"})
 RESTARTABLE_STATUSES = frozenset({"FAILED", "CANCELLED"})
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+DEFAULT_STATIC_DIR = Path(__file__).parent / "static" / "dist"  # bản build của web/
 
 
 def _doc_json(r: DocumentRecord) -> dict:
@@ -39,6 +41,7 @@ def create_app(
     repo: DocumentRepository,
     wf: WorkflowClient,
     settings: Settings | None = None,
+    static_dir: Path | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     app = FastAPI(title="Ingestion API")
@@ -161,10 +164,24 @@ def create_app(
                 out["progress"] = None
         return out
 
-    @app.get("/", include_in_schema=False)
-    def ui() -> HTMLResponse:
-        """Trang upload đơn giản, gọi chính các endpoint bên dưới."""
-        return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"))
+    spa_index = (static_dir or DEFAULT_STATIC_DIR) / "index.html"
+    if spa_index.is_file():
+        # SPA đã build: /assets là file tĩnh, các đường dẫn màn hình trả index.html
+        app.mount("/assets", StaticFiles(directory=spa_index.parent / "assets"), name="assets")
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/files", include_in_schema=False)
+        @app.get("/files/{path:path}", include_in_schema=False)
+        @app.get("/search", include_in_schema=False)
+        def spa() -> FileResponse:
+            return FileResponse(spa_index)
+
+    else:
+
+        @app.get("/", include_in_schema=False)
+        def ui() -> HTMLResponse:
+            """Trang upload đơn giản, gọi chính các endpoint bên dưới."""
+            return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"))
 
     @app.get("/documents/{doc_id}/markdown", response_class=PlainTextResponse)
     def get_markdown(doc_id: str) -> PlainTextResponse:
