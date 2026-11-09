@@ -2,6 +2,15 @@
 #   docker build --target api     -t ingest-api .
 #   docker build --target convert -t ingest-convert .
 #   docker build --target index   -t ingest-index .
+# Stage web chỉ chạy khi build target api (BuildKit bỏ qua stage không dùng).
+
+# Build giao diện web/. outDir của Vite trỏ ../packages/api/src/ingest/api/static/dist
+FROM node:22-slim AS web
+WORKDIR /build/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
 
 FROM python:3.12-slim AS base
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -22,6 +31,7 @@ RUN apt-get update \
 RUN uv sync --frozen --no-dev --no-install-workspace --package ingest-api
 COPY packages/core/src packages/core/src
 COPY packages/api/src packages/api/src
+COPY --from=web /build/packages/api/src/ingest/api/static/dist packages/api/src/ingest/api/static/dist
 RUN uv sync --frozen --no-dev --package ingest-api
 EXPOSE 8000
 ENTRYPOINT ["uv", "run", "--no-sync", "--package", "ingest-api", "ingest-api"]
