@@ -1,0 +1,80 @@
+@import 'tailwindcss';
+
+/* Token màu: sáng mặc định, tối theo prefers-color-scheme. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef0f4;
+  --border: #d9dde5;
+  --text: #1b2230;
+  --text-muted: #4f5b70;
+  --accent: #2456d6;
+  --accent-text: #ffffff;
+  --run-bg: #dde8ff;
+  --run-fg: #1a3f9e;
+  --ok-bg: #d8f2e0;
+  --ok-fg: #14602c;
+  --bad-bg: #fde0e0;
+  --bad-fg: #9b1c1c;
+  --warn-bg: #fff0cc;
+  --warn-fg: #7a4e00;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1420;
+    --surface: #171e2d;
+    --surface-2: #202a3d;
+    --border: #2d3850;
+    --text: #e6eaf2;
+    --text-muted: #a3aec3;
+    --accent: #7ba2ff;
+    --accent-text: #0b1226;
+    --run-bg: #1d2f5c;
+    --run-fg: #b8cdff;
+    --ok-bg: #12351f;
+    --ok-fg: #9fe3b4;
+    --bad-bg: #4a1b1b;
+    --bad-fg: #ffb4b4;
+    --warn-bg: #4a3a10;
+    --warn-fg: #ffd98a;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-text);
+  --color-run-bg: var(--run-bg);
+  --color-run-fg: var(--run-fg);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-fg: var(--ok-fg);
+  --color-bad-bg: var(--bad-bg);
+  --color-bad-fg: var(--bad-fg);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
