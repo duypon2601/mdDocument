@@ -26,7 +26,7 @@ Package `api` không được import `ingest.index` (`tests/test_package_boundar
 
 ## Màn hình
 
-Đường dẫn SPA không trùng route API: API dùng `/documents/...`, `/search`, `/stats`, Swagger dùng `/docs`.
+Đường dẫn SPA không trùng route API: API dùng `/documents/...`, `/search`, `/stats`, `/temporal/...`, Swagger dùng `/docs`.
 
 | Đường dẫn | Màn hình | Nội dung |
 |---|---|---|
@@ -34,6 +34,7 @@ Package `api` không được import `ingest.index` (`tests/test_package_boundar
 | `/files` | Tài liệu | Vùng upload (chọn profile v2 / v1 / bản cũ, nhiều file), tab lọc trạng thái, ô tìm tên, bảng có phân trang, nút trên từng dòng |
 | `/files/:docId` | Chi tiết | Tiêu đề, nút hành động, timeline các bước, tab Markdown / Chunk / Thông tin |
 | `/search` | Tìm kiếm thử | Ô câu hỏi, top_k, lọc theo tài liệu, danh sách kết quả có điểm số |
+| `/queues` | Hàng đợi | Mỗi task queue một thẻ: worker đang nghe, task chờ, tốc độ thêm/nhận. Bên dưới là workflow đang chạy và activity của từng workflow. Tự làm mới 2 giây một lần. Header trang nào cũng có một dòng tóm tắt queue, bấm vào thì mở trang này |
 
 Nút hành động theo trạng thái:
 
@@ -94,6 +95,16 @@ GET /documents/{id}/chunks?version=&offset=0&limit=50   (limit 1..200, version m
 POST /documents/cancel-running
 → 202 {"requested": ["<doc_id>", ...], "failed": [{"doc_id", "detail"}]}
   Huỷ mọi tài liệu có status trong RUNNING_STATUSES. Lỗi của một tài liệu không chặn các tài liệu khác.
+
+GET /temporal/queues
+→ {"fetched_at", "queues": [{"name", "expects_workflow", "workflow": <phần>, "activity": <phần>}],
+   "running": [{"workflow_id", "workflow_type", "doc_id", "file_name", "status", "started_at",
+                "activities": [{"name", "task_queue", "state", "attempt", "scheduled_at",
+                                "started_at", "worker", "last_failure"}]}],
+   "running_truncated"}
+  <phần> = {"pollers": [{"identity", "last_access"}], "backlog", "backlog_age_s", "add_rate", "dispatch_rate"}
+  Đọc thẳng từ Temporal (DescribeTaskQueue có report_stats, rồi describe từng workflow đang chạy, tối đa 50).
+  file_name và status lấy từ Metadata DB theo doc_id. Không kết nối được Temporal thì trả 503 TEMPORAL_UNAVAILABLE.
 
 POST /search   JSON {"query": str 1..2000 ký tự, "top_k": 1..50 (mặc định 8), "doc_id": str | null}
 → {"query", "model", "results": [{"score", "doc_id", "file_name", "index_version", "chunk_index",

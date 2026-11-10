@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bản Chất Temporal: Workflow Đăng Ký Ở Đâu & Cách Hoạt Động</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f141c;
+  --surface: #18202c;
+  --surface-2: #212c3d;
+  --border: #28364a;
+  --border-light: #37475f;
+  --text: #e6edf5;
+  --muted: #8fa0b5;
+  
+  --primary: #38bdf8;
+  --primary-soft: rgba(56, 189, 248, 0.12);
+  --wf: #a78bfa;
+  --wf-soft: rgba(167, 139, 250, 0.12);
+  --act: #fbbf24;
+  --act-soft: rgba(251, 191, 36, 0.12);
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.12);
+  --bad: #f87171;
+  --bad-soft: rgba(248, 113, 113, 0.12);
+  
+  --font-body: 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  padding: 32px 16px 80px;
+}
+
+.container {
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 16px;
+  max-width: 800px;
+}
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-title .icon {
+  font-size: 20px;
+}
+
+/* Problem Analysis Section */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+@media (max-width: 768px) {
+  .compare-grid { grid-template-columns: 1fr; }
+}
+
+.box-wrong {
+  background: var(--bad-soft);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 10px;
+  padding: 16px;
+}
+.box-wrong h3 {
+  color: var(--bad);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.box-right {
+  background: var(--ok-soft);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-radius: 10px;
+  padding: 16px;
+}
+.box-right h3 {
+  color: var(--ok);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.box-wrong ul, .box-right ul {
+  padding-left: 18px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.box-wrong li { color: #fca5a5; }
+.box-right li { color: #86efac; }
+
+/* Architecture Schema */
+.arch-diagram {
+  display: grid;
+  grid-template-columns: 1.1fr 0.3fr 1fr;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+}
+@media (max-width: 880px) {
+  .arch-diagram { grid-template-columns: 1fr; }
+  .arch-arrow { transform: rotate(90deg); margin: 10px auto; }
+}
+
+.arch-node {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.arch-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.arch-node-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.tag-wf { background: var(--wf-soft); color: var(--wf); border: 1px solid var(--wf); }
+.tag-srv { background: var(--primary-soft); color: var(--primary); border: 1px solid var(--primary); }
+
+.code-box {
+  background: #090d14;
+  border: 1px solid #1a2433;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #cbd5e1;
+  overflow-x: auto;
+}
+.code-hl {
+  color: var(--act);
+  font-weight: 600;
+}
+
+.arch-arrow {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.arch-arrow svg {
+  stroke: var(--primary);
+}
+
+/* Interactive Player */
+.interactive-container {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  margin-top: 16px;
+}
+@media (max-width: 850px) {
+  .interactive-container { grid-template-columns: 1fr; }
+}
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.step-btn:hover {
+  background: #28374d;
+  border-color: var(--border-light);
+}
+.step-btn.active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: #fff;
+}
+.step-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--border);
+  color: var(--muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-btn.active .step-num {
+  background: var(--primary);
+  color: #000;
+}
+.step-text {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Stage Visualization */
+.stage-view {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stage-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .stage-board { grid-template-columns: 1fr; }
+}
+
+.board-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-col-title {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.item-box {
+  background: #0d131c;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.item-box.highlight {
+  border-style: solid;
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: scale(1.02);
+}
+.item-box.highlight-wf {
+  border-style: solid;
+  border-color: var(--wf);
+  background: var(--wf-soft);
+  color: #fff;
+}
+.item-box.highlight-act {
+  border-style: solid;
+  border-color: var(--act);
+  background: var(--act-soft);
+  color: #fff;
+}
+
+.narrative-box {
+  background: #090e17;
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+.narrative-box b {
+  color: var(--primary);
+}
+
+/* Q&A Cheat Sheet */
+.qa-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+.qa-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+.qa-q {
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.qa-q::before {
+  content: "Q";
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.qa-a {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  padding-left: 24px;
+}
+.qa-a strong {
+  color: var(--text);
+}
+
+.footer-nav {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 20px;
+}
+.footer-nav a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.footer-nav a:hover {
+  text-decoration: underline;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="badge">Kiến Trúc & Khái Niệm Cốt Lõi</div>
+    <h1>Temporal: Workflow Đăng Ký Ở Đâu & Cách Hoạt Động</h1>
+    <p class="subtitle">
+      Giải thích trực quan vì sao Temporal Server <strong>không lưu code</strong> mà vẫn biết workflow có những gì, và cách giải thích chuẩn xác với Mentor.
+    </p>
+  </header>
+
+  <!-- Section 1: Vì sao bị mắng? -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">⚠️</span>
+      Tại sao câu nói trước đó bị Mentor bắt bẻ?
+    </div>
+    <div class="compare-grid">
+      <div class="box-wrong">
+        <h3>❌ Câu nói gây hiểu lầm:</h3>
+        <p style="font-style: italic; margin-bottom: 8px; color: #fff;">
+          "Phải có workflow điều phối để cập nhật activity mới cho worker khác làm tiếp"
+        </p>
+        <ul>
+          <li><strong>"Workflow điều phối":</strong> Nghe như bạn tự viết một service/container trung gian ngồi giữa chỉ huy.</li>
+          <li><strong>"Cập nhật activity mới":</strong> Nghe như phải có ai đó thủ công tạo hoặc push việc sang queue.</li>
+          <li><strong>"Để worker khác làm tiếp":</strong> Nghe như các worker chuyền tay nhau, giao việc trực tiếp cho nhau.</li>
+        </ul>
+      </div>
+
+      <div class="box-right">
+        <h3>✅ Bản chất thật trong Temporal:</h3>
+        <ul>
+          <li><strong>Temporal Server mới là bộ não điều phối:</strong> Workflow chỉ là một hàm code mô tả thứ tự các bước.</li>
+          <li><strong>Cơ chế Task Queue (Pull):</strong> Hàm workflow gọi <code>execute_activity</code>, Server tự tạo Activity Task vào Task Queue.</li>
+          <li><strong>Worker độc lập 100%:</strong> Worker A và Worker B không biết nhau, chỉ cắm đầu pull task từ Task Queue của mình.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Chỗ đăng ký Workflow -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">📍</span>
+      Câu hỏi 1: Chỗ nào là chỗ đăng ký Workflow?
+    </div>
+    <p style="color: var(--muted); font-size: 14px; margin-bottom: 12px;">
+      Temporal Server <strong>không hề lưu trữ code Python</strong> của bạn. Toàn bộ code Workflow và Activity được đăng ký trực tiếp trong <strong>tiến trình Worker</strong> khi khởi động:
+    </p>
+
+    <div class="arch-diagram">
+      <!-- Node 1: Worker -->
+      <div class="arch-node">
+        <div class="arch-node-header">
+          <span class="arch-node-title">Tiến trình Worker (Của bạn)</span>
+          <span class="tag tag-wf">Lưu Code Trong RAM</span>
+        </div>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+          Khởi động worker bằng Python:
+        </p>
+        <div class="code-box">
+worker = Worker(<br>
+&nbsp;&nbsp;client,<br>
+&nbsp;&nbsp;task_queue=<span style="color:#6ee7b7">"doc-queue"</span>,<br>
+&nbsp;&nbsp;<span class="code-hl">workflows=[DocWorkflow]</span>,<br>
+&nbsp;&nbsp;<span class="code-hl">activities=[ocr_act, split_act]</span><br>
+)<br>
+<span style="color:#94a3b8"># RAM Worker giữ toàn bộ hàm code!</span>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arch-arrow">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+        <span>Long Poll</span>
+        <span style="font-size: 10px; color: #64748b;">(Hỏi việc)</span>
+      </div>
+
+      <!-- Node 2: Server -->
+      <div class="arch-node">
+        <div class="arch-node-header">
+          <span class="arch-node-title">Temporal Server</span>
+          <span class="tag tag-srv">Chỉ Quản Lý Task Queue</span>
+        </div>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+          Server chỉ biết Tên chuỗi (String) & Queue:
+        </p>
+        <div class="code-box" style="color: #94a3b8;">
+[Task Queues]<br>
+- "doc-queue"<br>
+<br>
+[State History]<br>
+- Workflow ID: "doc-123"<br>
+- Type: <span style="color:#a78bfa">"DocWorkflow"</span> (chuỗi)<br>
+<span style="color:#f87171">❌ KHÔNG LƯU CODE LOGIC</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Làm sao Server biết Workflow có gì? (Mô phỏng tương tác) -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">🔄</span>
+      Câu hỏi 2: Không lưu code, làm sao Server biết Workflow có gì để chạy?
+    </div>
+    <p style="color: var(--muted); font-size: 14px;">
+      Temporal Server dùng cơ chế <strong>"Hỏi - Đáp từng bước" (Workflow Task & Commands)</strong>. Bấm vào từng bước bên dưới để xem sự phối hợp:
+    </p>
+
+    <div class="interactive-container">
+      <!-- Steps -->
+      <div class="steps-list">
+        <button class="step-btn active" onclick="setStep(1)">
+          <span class="step-num">1</span>
+          <div class="step-text">Client bấm chạy: Start Workflow</div>
+        </button>
+        <button class="step-btn" onclick="setStep(2)">
+          <span class="step-num">2</span>
+          <div class="step-text">Server giao Workflow Task cho Worker</div>
+        </button>
+        <button class="step-btn" onclick="setStep(3)">
+          <span class="step-num">3</span>
+          <div class="step-text">Worker chạy code Python -> Gặp Activity</div>
+        </button>
+        <button class="step-btn" onclick="setStep(4)">
+          <span class="step-num">4</span>
+          <div class="step-text">Server đẩy Activity Task vào Queue</div>
+        </button>
+        <button class="step-btn" onclick="setStep(5)">
+          <span class="step-num">5</span>
+          <div class="step-text">Worker làm xong Activity -> Chạy tiếp</div>
+        </button>
+      </div>
+
+      <!-- Stage -->
+      <div class="stage-view">
+        <div class="stage-board">
+          <div class="board-col">
+            <div class="board-col-title">1. Client / API</div>
+            <div id="box-client" class="item-box highlight">
+              <span>POST /start-workflow</span>
+              <span style="font-size: 10px; color: var(--muted);">Tên: "DocWorkflow"</span>
+            </div>
+          </div>
+
+          <div class="board-col">
+            <div class="board-col-title">2. Temporal Server</div>
+            <div id="box-server" class="item-box">
+              <span id="server-status">Nhận yêu cầu</span>
+              <span id="server-sub" style="font-size: 10px; color: var(--muted);">Tạo Workflow Execution</span>
+            </div>
+          </div>
+
+          <div class="board-col">
+            <div class="board-col-title">3. Worker (RAM)</div>
+            <div id="box-worker" class="item-box">
+              <span id="worker-status">Chờ việc (Polling)</span>
+              <span id="worker-sub" style="font-size: 10px; color: var(--muted);">Hàm DocWorkflow sẵn sàng</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Narrative box -->
+        <div id="narrative" class="narrative-box">
+          <b>Bước 1:</b> User hoặc Web API gửi lệnh lên Temporal Server: <i>"Hãy khởi động workflow có tên 'DocWorkflow' trên queue 'doc-queue'"</i>. Server chỉ ghi nhận tên chuỗi này vào Database.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Kịch bản nói chuyện với Mentor -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">💬</span>
+      Cheat Sheet: Mẫu câu chuẩn để trả lời Mentor
+    </div>
+    <div class="qa-grid">
+      <div class="qa-item">
+        <div class="qa-q">"Workflow được đăng ký ở đâu trong hệ thống?"</div>
+        <div class="qa-a">
+          Dạ, <strong>Workflow được đăng ký trực tiếp trong code khởi tạo của Worker</strong> (thông qua tham số <code>workflows=[...]</code>). Temporal Server không lưu trữ code này, nó chỉ quản lý Tên định danh và Task Queue.
+        </div>
+      </div>
+
+      <div class="qa-item">
+        <div class="qa-q">"Temporal Server không có code thì làm sao biết lúc nào gọi activity nào?"</div>
+        <div class="qa-a">
+          Dạ, khi chạy, Temporal Server gửi một <strong>Workflow Task</strong> cho Worker. Worker nạp hàm workflow trong RAM của nó ra chạy một đoạn code. Khi code đụng đến lời gọi <code>execute_activity</code>, Worker sẽ gửi lệnh (Command) về báo cho Server. Lúc đó Server mới biết và tạo <strong>Activity Task</strong> đẩy vào Task Queue.
+        </div>
+      </div>
+
+      <div class="qa-item">
+        <div class="qa-q">"Các Worker có chuyển giao việc trực tiếp cho nhau không?"</div>
+        <div class="qa-a">
+          Dạ không. <strong>Các Worker hoàn toàn độc lập</strong>. Mọi việc trao đổi đều thông qua việc <strong>Worker kéo việc (Poll) từ Task Queue</strong> do Temporal Server quản lý. Worker làm xong kết quả thì trả về cho Temporal Server, chứ các worker không hề biết sự tồn tại của nhau.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-nav">
+    <p>File tài liệu nội bộ: <code>docs/temporal/ban-chat-temporal.html</code></p>
+    <p style="margin-top: 4px;">
+      <a href="mo-phong.html">← Mở trang Mô phỏng chi tiết (mo-phong.html)</a> | 
+      <a href="khai-niem-va-scale-worker.html">🔥 4 Khái niệm & Scale Worker</a> | 
+      <a href="index.html">Trang luồng hoạt động (index.html) →</a>
+    </p>
+  </div>
+
+</div>
+
+<script>
+const stepData = {
+  1: {
+    client: { text: "POST /start-workflow", sub: "Yêu cầu: DocWorkflow", hl: "highlight" },
+    server: { text: "Nhận yêu cầu", sub: "Ghi nhận vào History DB", hl: "" },
+    worker: { text: "Chờ việc (Polling)", sub: "Đang nghe doc-queue", hl: "" },
+    narr: "<b>Bước 1:</b> Client hoặc API gửi lệnh lên Temporal Server: <i>'Khởi động workflow tên DocWorkflow trên doc-queue'</i>. Lúc này Server chưa hề biết trong DocWorkflow có code gì!"
+  },
+  2: {
+    client: { text: "Đang đợi kết quả", sub: "Workflow Running", hl: "" },
+    server: { text: "Sinh Workflow Task", sub: "Ném vào doc-queue", hl: "highlight" },
+    worker: { text: "Nhặt Workflow Task", sub: "Worker kéo task về RAM", hl: "highlight-wf" },
+    narr: "<b>Bước 2:</b> Server ném một <b>Workflow Task</b> vào Task Queue. Worker kéo task này về, tìm hàm <code>DocWorkflow</code> đã đăng ký trong RAM để bắt đầu chạy code Python."
+  },
+  3: {
+    client: { text: "Đang đợi...", sub: "Workflow Running", hl: "" },
+    server: { text: "Chờ Worker báo cáo", sub: "Server chưa làm gì thêm", hl: "" },
+    worker: { text: "Chạy đến dòng execute_activity", sub: "Gửi Command về Server", hl: "highlight-wf" },
+    narr: "<b>Bước 3:</b> Worker chạy hàm Python đến dòng <code>await execute_activity('ocr_page')</code>. Worker tạm dừng và gửi <b>Command</b> về Server: <i>'Server ơi, code muốn chạy activity ocr_page nè!'</i>"
+  },
+  4: {
+    client: { text: "Đang đợi...", sub: "Workflow Running", hl: "" },
+    server: { text: "Tạo Activity Task", sub: "Ném vào Queue cho Activity Worker", hl: "highlight-act" },
+    worker: { text: "Nhặt Activity Task", sub: "Bắt đầu chạy hàm OCR nặng", hl: "highlight-act" },
+    narr: "<b>Bước 4:</b> Nhận được Command từ Worker, giờ Temporal Server mới biết cần chạy OCR. Server ghi vào Lịch sử và đẩy một <b>Activity Task</b> vào Task Queue cho Worker xử lý tác vụ nặng."
+  },
+  5: {
+    client: { text: "Nhận kết quả cuối", sub: "Workflow Completed", hl: "highlight" },
+    server: { text: "Ghi nhận hoàn thành", sub: "Cập nhật State: COMPLETED", hl: "highlight" },
+    worker: { text: "Trả kết quả về Server", sub: "Workflow kết thúc thành công", hl: "highlight" },
+    narr: "<b>Bước 5:</b> Worker chạy xong hàm OCR, nộp kết quả về Server. Server lại giao Workflow Task tiếp theo cho Worker chạy nốt các dòng code còn lại cho đến khi Workflow kết thúc hoàn toàn!"
+  }
+};
+
+function setStep(step) {
+  // Update buttons
+  document.querySelectorAll('.step-btn').forEach((btn, idx) => {
+    btn.classList.toggle('active', idx + 1 === step);
+  });
+
+  const data = stepData[step];
+
+  // Update Client box
+  const cBox = document.getElementById('box-client');
+  cBox.className = 'item-box ' + data.client.hl;
+  cBox.children[0].innerText = data.client.text;
+  cBox.children[1].innerText = data.client.sub;
+
+  // Update Server box
+  const sBox = document.getElementById('box-server');
+  sBox.className = 'item-box ' + data.server.hl;
+  sBox.children[0].innerText = data.server.text;
+  sBox.children[1].innerText = data.server.sub;
+
+  // Update Worker box
+  const wBox = document.getElementById('box-worker');
+  wBox.className = 'item-box ' + data.worker.hl;
+  wBox.children[0].innerText = data.worker.text;
+  wBox.children[1].innerText = data.worker.sub;
+
+  // Update Narrative
+  document.getElementById('narrative').innerHTML = data.narr;
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khái Niệm Cốt Lõi Temporal & Bản Chất "Scale Là Scale Worker"</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --surface-1: #131b26;
+      --surface-2: #1b2636;
+      --surface-3: #243348;
+      --border: #26354a;
+      --border-focus: #3b82f6;
+      
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --white: #ffffff;
+
+      --primary: #38bdf8;
+      --primary-soft: rgba(56, 189, 248, 0.12);
+      
+      --wf: #a78bfa;
+      --wf-soft: rgba(167, 139, 250, 0.14);
+      --wf-border: #7c3aed;
+
+      --act: #fbbf24;
+      --act-soft: rgba(251, 191, 36, 0.14);
+      --act-border: #d97706;
+
+      --wrk: #34d399;
+      --wrk-soft: rgba(52, 211, 153, 0.14);
+      --wrk-border: #059669;
+
+      --tq: #f472b6;
+      --tq-soft: rgba(244, 114, 182, 0.14);
+      --tq-border: #db2777;
+
+      --srv: #60a5fa;
+      --srv-soft: rgba(96, 165, 250, 0.12);
+
+      --danger: #f87171;
+      --danger-soft: rgba(248, 113, 113, 0.15);
+
+      --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.65;
+      padding: 32px 16px 100px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(180deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0) 100%);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 36px 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: "";
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .badge-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-primary { background: var(--primary-soft); color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .badge-wf { background: var(--wf-soft); color: var(--wf); border: 1px solid rgba(167, 139, 250, 0.3); }
+    .badge-act { background: var(--act-soft); color: var(--act); border: 1px solid rgba(251, 191, 36, 0.3); }
+    .badge-wrk { background: var(--wrk-soft); color: var(--wrk); border: 1px solid rgba(52, 211, 153, 0.3); }
+    .badge-tq { background: var(--tq-soft); color: var(--tq); border: 1px solid rgba(244, 114, 182, 0.3); }
+
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1.3;
+      margin-bottom: 12px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 860px;
+    }
+
+    /* Core Nav Pills */
+    .nav-shortcuts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .nav-btn {
+      color: var(--text-muted);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn:hover {
+      background: var(--surface-3);
+      color: var(--white);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    /* Card Box */
+    .card {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      position: relative;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title .icon {
+      font-size: 22px;
+    }
+
+    /* 4 Concepts Grid */
+    .concept-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 820px) {
+      .concept-grid { grid-template-columns: 1fr; }
+    }
+
+    .concept-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+
+    .concept-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    .concept-card.wf { border-top: 4px solid var(--wf); }
+    .concept-card.act { border-top: 4px solid var(--act); }
+    .concept-card.tq { border-top: 4px solid var(--tq); }
+    .concept-card.wrk { border-top: 4px solid var(--wrk); }
+
+    .concept-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .concept-name {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .concept-analogy {
+      background: rgba(0, 0, 0, 0.25);
+      border-left: 3px solid #64748b;
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .concept-analogy b {
+      color: #f1f5f9;
+    }
+
+    .concept-card.wf .concept-analogy { border-left-color: var(--wf); }
+    .concept-card.act .concept-analogy { border-left-color: var(--act); }
+    .concept-card.tq .concept-analogy { border-left-color: var(--tq); }
+    .concept-card.wrk .concept-analogy { border-left-color: var(--wrk); }
+
+    .concept-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .concept-traits {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      font-size: 13px;
+    }
+
+    .concept-traits li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .concept-traits li span.bullet {
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .code-snippet {
+      background: #090d14;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #93c5fd;
+      overflow-x: auto;
+    }
+
+    /* Flow Graphic SVG */
+    .svg-flow-container {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .svg-flow-container svg {
+      width: 100%;
+      max-width: 950px;
+      height: auto;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+    }
+
+    /* Scaling Deep Dive Section */
+    .scale-hero {
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%);
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      border-radius: 16px;
+      padding: 28px;
+    }
+
+    .quote-banner {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px dashed rgba(52, 211, 153, 0.4);
+      border-radius: 12px;
+      padding: 18px 24px;
+      margin: 16px 0 24px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #a7f3d0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .scale-reasons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .scale-reasons { grid-template-columns: 1fr; }
+    }
+
+    .reason-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .reason-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--wrk);
+      color: #064e3b;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .reason-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--white);
+    }
+
+    .reason-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Interactive Simulator */
+    .sim-panel {
+      background: #090e17;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--surface-1);
+      padding: 16px 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sim-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .sim-btn:hover {
+      background: var(--surface-3);
+      color: var(--white);
+      border-color: var(--primary);
+    }
+
+    .sim-btn.primary {
+      background: #0284c7;
+      color: #fff;
+      border-color: #38bdf8;
+    }
+    .sim-btn.primary:hover {
+      background: #0369a1;
+    }
+
+    .sim-btn.success {
+      background: #059669;
+      color: #fff;
+      border-color: #34d399;
+    }
+    .sim-btn.success:hover {
+      background: #047857;
+    }
+
+    .sim-btn.danger {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .sim-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .sim-stage {
+      display: grid;
+      grid-template-columns: 240px 1fr 340px;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 980px) {
+      .sim-stage { grid-template-columns: 1fr; }
+    }
+
+    .stage-col {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .stage-col-header {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .queue-box {
+      flex: 1;
+      min-height: 180px;
+      background: rgba(0,0,0,0.3);
+      border: 2px dashed rgba(244, 114, 182, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 260px;
+    }
+
+    .queue-item {
+      background: rgba(244, 114, 182, 0.15);
+      border: 1px solid rgba(244, 114, 182, 0.4);
+      color: #fbcfe8;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .worker-pool {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      max-height: 260px;
+    }
+
+    .worker-node {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+
+    .worker-node.busy {
+      border-color: var(--wrk);
+      background: rgba(52, 211, 153, 0.08);
+      box-shadow: 0 0 12px rgba(52, 211, 153, 0.15);
+    }
+
+    .worker-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .worker-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .worker-node.busy .worker-avatar {
+      background: var(--wrk-soft);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { transform: scale(1); }
+      to { transform: scale(1.08); }
+    }
+
+    .worker-stats {
+      font-size: 12px;
+    }
+
+    .worker-name {
+      font-weight: 600;
+      color: var(--white);
+    }
+
+    .worker-task-status {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    .worker-node.busy .worker-task-status {
+      color: var(--wrk);
+    }
+
+    /* Simulation Stats Counter */
+    .sim-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .sim-metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .metric-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .metric-val {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--white);
+    }
+
+    /* Compare Table */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .compare-table th {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      padding: 12px 16px;
+      font-weight: 600;
+      border-bottom: 2px solid var(--border);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .compare-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+
+    .compare-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Interactive Quiz */
+    .quiz-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .quiz-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+
+    .quiz-q {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--white);
+      margin-bottom: 12px;
+    }
+
+    .quiz-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .quiz-opt {
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+    }
+
+    .quiz-opt:hover {
+      background: var(--surface-3);
+      border-color: var(--primary);
+    }
+
+    .quiz-opt.correct {
+      background: rgba(52, 211, 153, 0.15) !important;
+      border-color: var(--wrk) !important;
+      color: #6ee7b7 !important;
+      font-weight: 600;
+    }
+
+    .quiz-opt.wrong {
+      background: rgba(248, 113, 113, 0.15) !important;
+      border-color: var(--danger) !important;
+      color: #fca5a5 !important;
+    }
+
+    .quiz-exp {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #94a3b8;
+      background: rgba(0,0,0,0.25);
+      padding: 10px 14px;
+      border-radius: 6px;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .quiz-exp.show { display: block; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-dim);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="badge-bar">
+      <span class="badge badge-primary">Temporal Architecture</span>
+      <span class="badge badge-wf">Workflow</span>
+      <span class="badge badge-act">Activity</span>
+      <span class="badge badge-tq">Task Queue</span>
+      <span class="badge badge-wrk">Worker</span>
+    </div>
+    <h1>Nắm Rõ 4 Khái Niệm Cốt Lõi & Bản Chất "Scale Là Scale Worker"</h1>
+    <p class="subtitle">
+      Hiểu sâu sắc từng mắt xích trong kiến trúc Temporal: Worker, Activity, Workflow, Task Queue.
+      Lý giải nguyên lý vì sao khi chịu tải lớn, ta <strong>không scale Temporal Server mà chỉ cần scale Worker</strong>.
+    </p>
+
+    <div class="nav-shortcuts">
+      <a href="#four-concepts" class="nav-btn"><span>🧩</span> 4 Khái niệm cốt lõi</a>
+      <a href="#architecture-map" class="nav-btn"><span>🗺️</span> Bức tranh tổng thể</a>
+      <a href="#scale-worker" class="nav-btn"><span>⚡</span> Tại sao Scale là Scale Worker?</a>
+      <a href="#interactive-simulator" class="nav-btn"><span>🎮</span> Mô phỏng chạy tải & Scale</a>
+      <a href="#matrix-compare" class="nav-btn"><span>⚖️</span> Bảng đối sánh nhanh</a>
+      <a href="#quick-quiz" class="nav-btn"><span>🎯</span> Trắc nghiệm củng cố</a>
+    </div>
+  </header>
+
+  <!-- SECTION 1: 4 CORE CONCEPTS -->
+  <section id="four-concepts" class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="icon">🧩</span>
+        1. Mổ xẻ 4 Khái Niệm Trụ Cột (The 4 Pillars)
+      </div>
+      <span class="badge badge-primary">Deep Dive</span>
+    </div>
+
+    <div class="concept-grid">
+
+      <!-- 1. WORKFLOW -->
+      <div class="concept-card wf">
+        <div class="concept-head">
+          <div class="concept-name" style="color: var(--wf);">
+            <span>📋</span> Workflow
+          </div>
+          <span class="badge badge-wf">Điều phối / Orchestrator</span>
+        </div>
+
+        <div class="concept-analogy">
+          <b>Ẩn dụ đời thường:</b> <i>"Tổng chỉ huy công trình"</i> hoặc <i>"Bản vẽ thi công"</i>. Chỉ huy không tự tay vác xi măng, mà vạch ra trình tự: Bước 1 đào móng, Bước 2 đổ cột, Bước 3 lợp mái.
+        </div>
+
+        <p class="concept-desc">
+          Là đoạn code Python đóng vai trò <strong>nhạc trưởng</strong> định nghĩa quy trình kinh doanh. Workflow quyết định thứ tự thực thi, điều kiện rẽ nhánh, timeout, và chính sách retry.
+        </p>
+
+        <ul class="concept-traits">
+          <li><span class="bullet" style="color: var(--wf);">✔</span> <span><strong>Deterministic (Đơn định tuyệt đối):</strong> Chạy lại 1000 lần với cùng input phải cho ra cùng các lệnh gọi.</span></li>
+          <li><span class="bullet" style="color: var(--wf);">✔</span> <span><strong>Replay State:</strong> Khi Worker bị sập, một Worker khác nạp lịch sử (History) từ Temporal Server và chạy lại từ đầu để dựng lại đúng trạng thái đang dở.</span></li>
+          <li><span class="bullet" style="color: var(--danger);">✖</span> <span><strong>CẤM TUYỆT ĐỐI:</strong> Không được gọi REST API, không query DB, không <code>datetime.now()</code>, không <code>random()</code> trực tiếp trong Workflow!</span></li>
+        </ul>
+
+        <div class="code-snippet">
+@workflow.defn
+class DocumentPipelineWorkflow:
+    @workflow.run
+    async def run(self, doc_id: str):
+        # Chỉ điều phối gọi Activity, KHÔNG tự làm I/O
+        text = await workflow.execute_activity(
+            ocr_file_activity, doc_id, 
+            start_to_close_timeout=timedelta(minutes=5)
+        )
+        return await workflow.execute_activity(extract_info_activity, text)
+        </div>
+      </div>
+
+      <!-- 2. ACTIVITY -->
+      <div class="concept-card act">
+        <div class="concept-head">
+          <div class="concept-name" style="color: var(--act);">
+            <span>🔨</span> Activity
+          </div>
+          <span class="badge badge-act">Thực thi / Worker Task</span>
+        </div>
+
+        <div class="concept-analogy">
+          <b>Ẩn dụ đời thường:</b> <i>"Người thợ chuyên môn"</i> (thợ hàn, thợ mộc). Nhận bản vẽ từ chỉ huy để làm một việc cụ thể: đục tường, sơn nhà. Làm xong thì bàn giao thành phẩm hoặc báo hỏng để thử lại.
+        </div>
+
+        <p class="concept-desc">
+          Là nơi chứa <strong>toàn bộ công việc thực tế (side-effects & heavy lifting)</strong>: gọi model LLM, bóc tách OCR, đọc ghi database Postgres, gọi REST API ngoài, xử lý ảnh.
+        </p>
+
+        <ul class="concept-traits">
+          <li><span class="bullet" style="color: var(--act);">✔</span> <span><strong>Non-deterministic thoải mái:</strong> Được phép gọi mạng chập chờn, query database, tính toán ngẫu nhiên, ghi file vào ổ cứng.</span></li>
+          <li><span class="bullet" style="color: var(--act);">✔</span> <span><strong>Tự động Retry siêu mạnh:</strong> Cấu hình Exponential Backoff. Nếu API của OpenAI bị 429 hay mạng đứt, Temporal tự retry mà không làm hỏng Workflow.</span></li>
+          <li><span class="bullet" style="color: var(--act);">✔</span> <span><strong>Heartbeat:</strong> Với tác vụ lâu (như render video 30 phút), Activity gửi nhịp tim định kỳ về Server để chứng minh nó chưa bị treo máy.</span></li>
+        </ul>
+
+        <div class="code-snippet">
+@activity.defn
+async def ocr_file_activity(doc_id: str) -> str:
+    # Nơi làm việc nặng thực sự (Tốn CPU/RAM/IO)
+    file_bytes = await download_from_s3(doc_id)
+    text = run_heavy_ocr(file_bytes)
+    return text
+        </div>
+      </div>
+
+      <!-- 3. TASK QUEUE -->
+      <div class="concept-card tq">
+        <div class="concept-head">
+          <div class="concept-name" style="color: var(--tq);">
+            <span>📬</span> Task Queue
+          </div>
+          <span class="badge badge-tq">Hàng đợi định tuyến</span>
+        </div>
+
+        <div class="concept-analogy">
+          <b>Ẩn dụ đời thường:</b> <i>"Hộp thư / Khay để phiếu việc"</i>. Chỉ huy thả phiếu giao việc vào khay có dán nhãn: "Hộp việc OCR", "Hộp việc AI". Thợ nào rảnh thì tự thò tay vào lấy một phiếu đi làm.
+        </div>
+
+        <p class="concept-desc">
+          Là hàng đợi trung gian (Queue) nằm trên Temporal Server, được định danh đơn giản bằng một chuỗi chuỗi ký tự (ví dụ: <code>"doc-processing-queue"</code>).
+        </p>
+
+        <ul class="concept-traits">
+          <li><span class="bullet" style="color: var(--tq);">✔</span> <span><strong>Cơ chế PULL (Long-Polling):</strong> Server KHÔNG bắn task vào IP Worker. Worker chủ động mở kết nối gRPC hỏi: <i>"Có việc không?"</i>. Rảnh thì nhận, bận thì thôi.</span></li>
+          <li><span class="bullet" style="color: var(--tq);">✔</span> <span><strong>Decoupling (Phân tách hoàn toàn):</strong> Client & Server không cần biết Worker đang chạy ở đâu, bao nhiêu máy, sau NAT hay Firewall đều chạy ngon lành.</span></li>
+          <li><span class="bullet" style="color: var(--tq);">✔</span> <span><strong>Tự động cân bằng tải (Load Balancing):</strong> Không cần Nginx / Load Balancer đứng trước Worker. Worker nào rảnh tay thì nhặt việc trước.</span></li>
+        </ul>
+
+        <div class="code-snippet">
+# Không cần cấu hình trước trên Server, tự tạo theo tên khi có Worker lắng nghe
+TASK_QUEUE_NAME = "pdf-extraction-queue"
+
+# Client bắn việc vào Queue:
+await client.start_workflow(DocWorkflow.run, id="job-1", task_queue=TASK_QUEUE_NAME)
+        </div>
+      </div>
+
+      <!-- 4. WORKER -->
+      <div class="concept-card wrk">
+        <div class="concept-head">
+          <div class="concept-name" style="color: var(--wrk);">
+            <span>⚙️</span> Worker
+          </div>
+          <span class="badge badge-wrk">Tiến trình máy chủ thực</span>
+        </div>
+
+        <div class="concept-analogy">
+          <b>Ẩn dụ đời thường:</b> <i>"Đội ngũ nhân công đang ngồi ở công xưởng"</i>. Là những người có cơ bắp, tốn cơm ăn nước uống (tốn CPU/RAM của máy thật) để cày cuốc công việc.
+        </div>
+
+        <p class="concept-desc">
+          Là tiến trình Python (Service / Docker Container / K8s Pod) do bạn viết và vận hành. <strong>Đây là nơi duy nhất lưu trữ code Workflow & Activity trong RAM</strong>.
+        </p>
+
+        <ul class="concept-traits">
+          <li><span class="bullet" style="color: var(--wrk);">✔</span> <span><strong>Temporal Server KHÔNG LƯU CODE:</strong> Server chỉ lưu lịch sử dạng JSON. Worker mới là nơi nạp code Python vào bộ nhớ để chạy.</span></li>
+          <li><span class="bullet" style="color: var(--wrk);">✔</span> <span><strong>Vòng lặp bất tận (Long Poll Loop):</strong> Worker cắm kết nối gRPC liên tục vào Task Queue để rình việc, giải mã task, thực thi hàm và gửi lại kết quả.</span></li>
+          <li><span class="bullet" style="color: var(--wrk);">✔</span> <span><strong>Chết không mất việc:</strong> Nếu Worker đang chạy mà bị OOM hay đứt điện, Server phát hiện qua timeout và nhả task lại vào Task Queue cho Worker khác làm tiếp!</span></li>
+        </ul>
+
+        <div class="code-snippet">
+# File worker.py chạy trong Docker/Pod:
+worker = Worker(
+    client,
+    task_queue="pdf-extraction-queue",
+    workflows=[DocumentPipelineWorkflow], # Nạp code vào RAM
+    activities=[ocr_file_activity, extract_info_activity]
+)
+await worker.run() # Bắt đầu poll việc
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SECTION 2: ARCHITECTURE FLOW DIAGRAM -->
+  <section id="architecture-map" class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="icon">🗺️</span>
+        2. Bức Tranh Tổng Thể: Cách 4 Khái Niệm Phối Hợp
+      </div>
+      <span class="badge badge-primary">Sơ đồ Luồng</span>
+    </div>
+
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+      Temporal Server ở giữa đóng vai trò <strong>Broker & State Store</strong>. Client gửi lệnh kích hoạt, Server đặt task vào Task Queue, các Worker độc lập kéo task về chạy:
+    </p>
+
+    <div class="svg-flow-container">
+      <svg viewBox="0 0 960 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="grad-client" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#0284c7" stop-opacity="0.1"/>
+          </linearGradient>
+          <linearGradient id="grad-server" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#818cf8" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#4f46e5" stop-opacity="0.1"/>
+          </linearGradient>
+          <linearGradient id="grad-worker" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#34d399" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#059669" stop-opacity="0.1"/>
+          </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="glow"/>
+            <feComposite in="SourceGraphic" in2="glow" operator="over"/>
+          </filter>
+        </defs>
+
+        <!-- 1. CLIENT BOX -->
+        <rect x="20" y="80" width="180" height="260" rx="14" fill="url(#grad-client)" stroke="#38bdf8" stroke-width="2"/>
+        <text x="110" y="115" fill="#38bdf8" font-size="16" font-family="'Be Vietnam Pro', sans-serif" font-weight="700" text-anchor="middle">CLIENT APP</text>
+        <text x="110" y="135" fill="#94a3b8" font-size="12" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">(FastAPI / Web UI)</text>
+        
+        <rect x="35" y="160" width="150" height="60" rx="8" fill="#131b26" stroke="#26354a"/>
+        <text x="110" y="185" fill="#e2e8f0" font-size="12" font-family="'JetBrains Mono', monospace" text-anchor="middle">start_workflow()</text>
+        <text x="110" y="205" fill="#38bdf8" font-size="11" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">Bắn yêu cầu chạy</text>
+
+        <rect x="35" y="240" width="150" height="60" rx="8" fill="#131b26" stroke="#26354a"/>
+        <text x="110" y="265" fill="#e2e8f0" font-size="12" font-family="'JetBrains Mono', monospace" text-anchor="middle">get_result()</text>
+        <text x="110" y="285" fill="#94a3b8" font-size="11" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">Chờ kết quả cuối</text>
+
+        <!-- ARROW 1: CLIENT -> SERVER -->
+        <path d="M 200 190 L 290 190" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="6 4"/>
+        <polygon points="295,190 285,185 285,195" fill="#38bdf8"/>
+        <text x="245" y="175" fill="#38bdf8" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">gRPC</text>
+
+        <!-- 2. TEMPORAL SERVER CLUSTER -->
+        <rect x="300" y="40" width="320" height="340" rx="16" fill="url(#grad-server)" stroke="#818cf8" stroke-width="2"/>
+        <text x="460" y="75" fill="#a5b4fc" font-size="18" font-family="'Be Vietnam Pro', sans-serif" font-weight="700" text-anchor="middle">TEMPORAL SERVER</text>
+        <text x="460" y="95" fill="#94a3b8" font-size="12" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">(Bộ não điều phối + Quản lý State)</text>
+
+        <!-- TASK QUEUE BOX (INNER) -->
+        <rect x="325" y="120" width="270" height="130" rx="10" fill="#0f172a" stroke="#f472b6" stroke-width="2"/>
+        <rect x="340" y="108" width="130" height="22" rx="4" fill="#db2777"/>
+        <text x="405" y="123" fill="#ffffff" font-size="11" font-family="'JetBrains Mono', monospace" font-weight="700" text-anchor="middle">TASK QUEUE</text>
+        
+        <g transform="translate(340, 140)">
+          <!-- Queue item 1 -->
+          <rect x="0" y="5" width="240" height="28" rx="6" fill="#1e293b" stroke="#f472b6" stroke-opacity="0.6"/>
+          <text x="12" y="23" fill="#fbcfe8" font-size="11" font-family="'JetBrains Mono', monospace">WorkflowTask: DocWorkflow</text>
+          <!-- Queue item 2 -->
+          <rect x="0" y="40" width="240" height="28" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.6"/>
+          <text x="12" y="58" fill="#fef08a" font-size="11" font-family="'JetBrains Mono', monospace">ActivityTask: ocr_file</text>
+          <!-- Queue item 3 -->
+          <rect x="0" y="75" width="240" height="28" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.6"/>
+          <text x="12" y="93" fill="#fef08a" font-size="11" font-family="'JetBrains Mono', monospace">ActivityTask: extract_info</text>
+        </g>
+
+        <!-- STATE HISTORY BOX -->
+        <rect x="325" y="270" width="270" height="85" rx="10" fill="#0f172a" stroke="#475569"/>
+        <text x="460" y="295" fill="#94a3b8" font-size="13" font-family="'Be Vietnam Pro', sans-serif" font-weight="600" text-anchor="middle">Lưu trữ Event History (DB)</text>
+        <text x="460" y="318" fill="#64748b" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">[Started] -> [Scheduled] -> [Done]</text>
+        <text x="460" y="338" fill="#ef4444" font-size="11" font-family="'Be Vietnam Pro', sans-serif" font-weight="500" text-anchor="middle">❌ KHÔNG LƯU CODE CỦA BẠN</text>
+
+        <!-- ARROW 2: TASK QUEUE -> WORKERS (LONG POLL) -->
+        <path d="M 620 185 L 710 140" stroke="#34d399" stroke-width="2.5"/>
+        <polygon points="715,138 703,136 708,146" fill="#34d399"/>
+
+        <path d="M 620 190 L 710 280" stroke="#34d399" stroke-width="2.5"/>
+        <polygon points="715,283 708,274 703,284" fill="#34d399"/>
+
+        <text x="665" y="150" fill="#34d399" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">Long Poll</text>
+        <text x="665" y="250" fill="#34d399" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">Long Poll</text>
+
+        <!-- 3. WORKER NODES -->
+        <!-- Worker 1 -->
+        <rect x="720" y="50" width="220" height="145" rx="12" fill="url(#grad-worker)" stroke="#34d399" stroke-width="2"/>
+        <text x="830" y="78" fill="#34d399" font-size="15" font-family="'Be Vietnam Pro', sans-serif" font-weight="700" text-anchor="middle">WORKER INSTANCE #1</text>
+        <text x="830" y="96" fill="#94a3b8" font-size="11" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">(Docker / Pod A)</text>
+
+        <rect x="735" y="110" width="190" height="65" rx="6" fill="#0f172a" stroke="#26354a"/>
+        <text x="830" y="130" fill="#a78bfa" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">RAM: DocWorkflow</text>
+        <text x="830" y="150" fill="#fbbf24" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">RAM: ocr_file()</text>
+        <text x="830" y="166" fill="#34d399" font-size="10" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">⚡ Đang xử lý 1 Task</text>
+
+        <!-- Worker 2 -->
+        <rect x="720" y="225" width="220" height="145" rx="12" fill="url(#grad-worker)" stroke="#34d399" stroke-width="2"/>
+        <text x="830" y="253" fill="#34d399" font-size="15" font-family="'Be Vietnam Pro', sans-serif" font-weight="700" text-anchor="middle">WORKER INSTANCE #2</text>
+        <text x="830" y="271" fill="#94a3b8" font-size="11" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">(Docker / Pod B)</text>
+
+        <rect x="735" y="285" width="190" height="65" rx="6" fill="#0f172a" stroke="#26354a"/>
+        <text x="830" y="305" fill="#a78bfa" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">RAM: DocWorkflow</text>
+        <text x="830" y="325" fill="#fbbf24" font-size="11" font-family="'JetBrains Mono', monospace" text-anchor="middle">RAM: extract_info()</text>
+        <text x="830" y="341" fill="#94a3b8" font-size="10" font-family="'Be Vietnam Pro', sans-serif" text-anchor="middle">💤 Đang rảnh (Long-polling)</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- SECTION 3: SCALE LÀ SCALE WORKER -->
+  <section id="scale-worker" class="card scale-hero">
+    <div class="card-header" style="border-bottom-color: rgba(52, 211, 153, 0.2);">
+      <div class="card-title" style="color: #6ee7b7;">
+        <span class="icon">⚡</span>
+        3. Bản Chất Cốt Lõi: Tại Sao Nói "Scale Là Scale Worker"?
+      </div>
+      <span class="badge badge-wrk">Bản Chất Hệ Thống</span>
+    </div>
+
+    <div class="quote-banner">
+      <span style="font-size: 28px;">💡</span>
+      <div>
+        "Trong Temporal: Tải nặng nề nhất nằm ở việc thực thi mã nguồn. Temporal Server chỉ giữ hàng đợi và sự kiện. Do đó, muốn mở rộng năng lực xử lý (Throughput), bạn <u>chỉ cần cắm thêm Worker</u>!"
+      </div>
+    </div>
+
+    <p style="font-size: 15px; color: #cbd5e1; line-height: 1.7;">
+      Khi xây dựng hệ thống xử lý dữ liệu và trích xuất thông tin tài liệu, các tác vụ như <strong>nhận dạng OCR, chia nhỏ file PDF, bóc tách bảng biểu, gọi mô hình AI Gemini/OpenAI, embedding vector</strong> ngốn 99% CPU, GPU, RAM và thời gian chờ mạng.
+      Temporal được thiết kế theo tư duy phân tách triệt để:
+    </p>
+
+    <div class="scale-reasons">
+      <div class="reason-box">
+        <div class="reason-num">1</div>
+        <div class="reason-title">Server Không Chạy Code Của Bạn</div>
+        <div class="reason-desc">
+          Temporal Server viết bằng Go/Java, nó chỉ làm việc nhẹ: ghi event log vào Postgres/Cassandra và giữ Task Queue. Nó không tốn 1MB RAM nào để load mô hình OCR hay parse PDF. Do đó, 1 Server cụm nhỏ có thể điều phối hàng triệu task mà không hề đuối sức.
+        </div>
+      </div>
+
+      <div class="reason-box">
+        <div class="reason-num">2</div>
+        <div class="reason-title">Cơ Chế Pull (Không Bị Sập Kéo Theo)</div>
+        <div class="reason-desc">
+          Trong kiến trúc REST cổ điển, nếu user gửi 10.000 file một lúc thì web server sẽ sập vì quá tải connection (OOM/504). Trong Temporal, 10.000 file chỉ biến thành 10.000 task nằm yên trong Task Queue. Worker cứ bình tĩnh lấy từng cái làm, <strong>không bao giờ bị sập theo hình thức cascading failure</strong>.
+        </div>
+      </div>
+
+      <div class="reason-box">
+        <div class="reason-num">3</div>
+        <div class="reason-title">Bật Thêm Worker Là Tăng Tốc Tức Thì</div>
+        <div class="reason-desc">
+          Không cần restart Temporal Server, không cần sửa config router hay Nginx. Muốn giải quyết hàng đợi nhanh hơn? Bạn chỉ cần tăng số lượng Docker Container / K8s Pod chạy <code>python worker.py</code> từ <strong>2 Pod lên 20 Pod</strong>. Chúng sẽ tự động chia nhau kéo task trong Task Queue về làm song song!
+        </div>
+      </div>
+    </div>
+
+    <!-- KEDA & Auto-scaling Box -->
+    <div style="margin-top: 20px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px;">
+      <h4 style="color: var(--primary); font-size: 15px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+        <span>🚀</span> Thực tế triển khai: Tự động co giãn (Horizontal Pod Autoscaler / KEDA)
+      </h4>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Trong môi trường production, DevOps chỉ cần cấu hình metric <code>temporal_task_queue_backlog</code> (số lượng task đang chờ trong Task Queue):
+        <br>• Khi hàng đợi có > 500 tasks ➔ K8s tự động bật thêm Worker Pods (Scale Out).
+        <br>• Khi hàng đợi cạn (rảnh việc) ➔ K8s tự thu hồi Worker Pods về mức tối thiểu để tiết kiệm tiền cloud (Scale In).
+      </p>
+    </div>
+  </section>
+
+  <!-- SECTION 4: INTERACTIVE SIMULATOR -->
+  <section id="interactive-simulator" class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="icon">🎮</span>
+        4. Mô Phỏng Trực Quan: Đẩy Tải & Scale Worker Thực Tế
+      </div>
+      <span class="badge badge-wrk">Interactive Sandbox</span>
+    </div>
+
+    <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+      Hãy thử bấm <strong>"Bắn +10 Tài Liệu"</strong> để tạo task vào Task Queue. Quan sát hàng đợi phình to, sau đó bấm <strong>"+ Thêm 1 Worker"</strong> để thấy tốc độ giải quyết task tăng vọt như thế nào:
+    </p>
+
+    <div class="sim-panel">
+      <!-- Top Control Bar -->
+      <div class="sim-controls">
+        <div class="control-group">
+          <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Hành động:</span>
+          <button class="sim-btn primary" onclick="addTasks(5)">+ 5 Tài Liệu</button>
+          <button class="sim-btn primary" onclick="addTasks(20)">+ 20 Tài Liệu (Tải Cao)</button>
+        </div>
+
+        <div class="control-group">
+          <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Scale Worker:</span>
+          <button class="sim-btn" onclick="removeWorker()">- Giảm Worker</button>
+          <button class="sim-btn success" onclick="addWorker()">+ Thêm Worker (Scale Up)</button>
+          <button class="sim-btn danger" onclick="resetSim()">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Live Metrics Display -->
+      <div class="sim-metrics">
+        <div class="metric-card">
+          <span class="metric-label">Tasks Trong Task Queue</span>
+          <span id="metric-queue" class="metric-val" style="color: var(--tq);">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Số Lượng Worker Đang Chạy</span>
+          <span id="metric-workers" class="metric-val" style="color: var(--wrk);">2</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Tổng Tasks Hoàn Thành</span>
+          <span id="metric-completed" class="metric-val" style="color: var(--primary);">0</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Tốc Độ Xử Lý Ước Tính</span>
+          <span id="metric-speed" class="metric-val" style="color: #fde047;">~2 docs/s</span>
+        </div>
+      </div>
+
+      <!-- Simulation Stage Visual -->
+      <div class="sim-stage">
+        
+        <!-- Col 1: Client Ingestion -->
+        <div class="stage-col">
+          <div class="stage-col-header">
+            <span>1. Client / Người Dùng</span>
+            <span>📤 Push</span>
+          </div>
+          <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 14px; text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+            <div style="font-size: 32px;">📑</div>
+            <div style="font-size: 13px; font-weight: 600; color: #fff;">Upload Tài Liệu</div>
+            <div style="font-size: 11px; color: var(--text-dim);">Gọi <code>start_workflow()</code> liên tục</div>
+          </div>
+        </div>
+
+        <!-- Col 2: Task Queue on Server -->
+        <div class="stage-col">
+          <div class="stage-col-header">
+            <span>2. Task Queue ("doc-pipeline")</span>
+            <span id="queue-status-badge" style="color: var(--tq); font-family: var(--font-mono);">0 việc</span>
+          </div>
+          <div id="queue-container" class="queue-box">
+            <!-- Dynamic Queue Tasks inserted here -->
+            <div id="queue-empty-msg" style="color: var(--text-dim); font-size: 12px; text-align: center; margin: auto;">
+              Queue đang trống. Bấm "+ 5 Tài Liệu" để thử!
+            </div>
+          </div>
+        </div>
+
+        <!-- Col 3: Worker Fleet (Scaling) -->
+        <div class="stage-col">
+          <div class="stage-col-header">
+            <span>3. Cụm Worker Đang Chạy</span>
+            <span id="worker-count-badge" style="color: var(--wrk); font-family: var(--font-mono);">2 Pods</span>
+          </div>
+          <div id="worker-pool-container" class="worker-pool">
+            <!-- Dynamic Workers inserted here -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Explanation note -->
+      <div style="font-size: 13px; color: var(--text-muted); background: var(--surface-1); border-left: 3px solid var(--wrk); padding: 10px 14px; border-radius: 0 8px 8px 0;">
+        <strong>Nhận xét quan sát:</strong> Khi bạn nạp dồn dập 20 tài liệu mà chỉ có 1-2 Worker, hàng đợi sẽ ùn ứ. Ngay khi bạn bấm <strong>"+ Thêm Worker"</strong> lên 4 hoặc 5, các worker lập tức chia việc nhau làm đồng thời và dọn sạch hàng đợi trong tích tắc. Đây chính là bản chất <strong>"Scale hệ thống là Scale Worker"</strong>!
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: COMPARISON MATRIX -->
+  <section id="matrix-compare" class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="icon">⚖️</span>
+        5. Bảng Đối Sánh Nhanh: Phân Biệt Để Không Bị Nhầm Lẫn
+      </div>
+      <span class="badge badge-primary">Matrix Phân Biệt</span>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th style="width: 20%;">Tiêu chí</th>
+            <th style="width: 40%; color: var(--wf);">Workflow (Nhạc trưởng)</th>
+            <th style="width: 40%; color: var(--act);">Activity (Thợ thi công)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Bản chất</strong></td>
+            <td>Mô tả thứ tự logic kinh doanh, luồng đi của dữ liệu.</td>
+            <td>Thực thi một bước công việc độc lập, nặng nhọc.</td>
+          </tr>
+          <tr>
+            <td><strong>Tính đơn định (Determinism)</strong></td>
+            <td><strong style="color: #6ee7b7;">Bắt buộc 100%</strong>. Chạy lại với cùng input phải ra chuỗi event y hệt (để Replay).</td>
+            <td><strong style="color: #fde047;">Tùy ý (Non-deterministic)</strong>. Được phép gọi mạng, query DB, phụ thuộc thời gian thực.</td>
+          </tr>
+          <tr>
+            <td><strong>Nơi thực thi I/O & Gọi Model AI</strong></td>
+            <td><span style="color: var(--danger); font-weight: 600;">❌ Tuyệt đối cấm</span> thực hiện I/O trực tiếp.</td>
+            <td><span style="color: var(--wrk); font-weight: 600;">✔ Chuyên trách</span> gọi REST API, LLM, OCR, ghi Postgres, đọc file S3.</td>
+          </tr>
+          <tr>
+            <td><strong>Cơ chế tự hồi phục khi lỗi</strong></td>
+            <td>Khi Worker sập, Server bảo Worker khác nạp lại History để Replay khôi phục biến trong RAM.</td>
+            <td>Tự động thử lại (Retry Policy) với Backoff. Nếu hỏng vĩnh viễn mới ném Exception về Workflow.</td>
+          </tr>
+          <tr>
+            <td><strong>Scale khi tải tăng</strong></td>
+            <td>Workflow Task rất nhẹ, thường chỉ tiêu tốn vài mili-giây CPU để quyết định bước tiếp theo.</td>
+            <td><strong>Điểm nghẽn tài nguyên chính</strong> (ngốn 95% CPU/GPU). Cần scale nhiều Activity Worker.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top: 24px; overflow-x: auto;">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th style="width: 20%;">Thành phần</th>
+            <th style="width: 40%; color: var(--srv);">Temporal Server</th>
+            <th style="width: 40%; color: var(--wrk);">Worker (Do bạn viết)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Nơi lưu trữ Code</strong></td>
+            <td><span style="color: var(--danger); font-weight: 600;">Không có code của bạn</span> (chỉ lưu chuỗi string định danh).</td>
+            <td><span style="color: var(--wrk); font-weight: 600;">Nạp toàn bộ Python functions vào RAM</span> khi khởi động.</td>
+          </tr>
+          <tr>
+            <td><strong>Ai kết nối tới ai?</strong></td>
+            <td>Đứng yên lắng nghe kết nối gRPC đến cổng 7233.</td>
+            <td>Chủ động mở kết nối gRPC tới Server và thực hiện Long-Poll.</td>
+          </tr>
+          <tr>
+            <td><strong>Cách Scale</strong></td>
+            <td>Scale cụm Server / Database Cluster (thường hiếm khi cần vì rất nhẹ).</td>
+            <td><strong>Scale theo nhu cầu tác vụ</strong> (tăng số Pod K8s, Docker containers khi có nhiều file).</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION 6: QUICK QUIZ -->
+  <section id="quick-quiz" class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <span class="icon">🎯</span>
+        6. Trắc Nghiệm Tình Huống: Kiểm Tra Độ Hiểu Sâu
+      </div>
+      <span class="badge badge-primary">Tự Đánh Giá</span>
+    </div>
+
+    <div class="quiz-container">
+      
+      <!-- Question 1 -->
+      <div class="quiz-item" id="q1">
+        <div class="quiz-q">Câu 1: Bạn muốn gọi API của OpenAI để tóm tắt văn bản. Bạn phải viết hàm gọi này ở đâu?</div>
+        <div class="quiz-options">
+          <button class="quiz-opt" onclick="checkAnswer('q1', this, false)">A. Viết trực tiếp trong hàm Workflow vì nó là nơi chỉ đạo quy trình.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q1', this, true)">B. Viết trong hàm Activity có decorator @activity.defn.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q1', this, false)">C. Viết trong Temporal Server cấu hình plugin.</button>
+        </div>
+        <div class="quiz-exp">
+          <strong>Chính xác!</strong> Lời gọi API mạng ra ngoài là tác vụ có side-effects và non-deterministic, bắt buộc phải viết trong <strong>Activity</strong>. Nếu viết trực tiếp trong Workflow, cơ chế Replay của Temporal sẽ bị phá vỡ!
+        </div>
+      </div>
+
+      <!-- Question 2 -->
+      <div class="quiz-item" id="q2">
+        <div class="quiz-q">Câu 2: Khi lượng tài liệu upload đột ngột tăng gấp 50 lần vào giờ cao điểm, bạn cần làm gì để hệ thống không bị nghẽn?</div>
+        <div class="quiz-options">
+          <button class="quiz-opt" onclick="checkAnswer('q2', this, false)">A. Nâng cấp RAM và CPU cho Temporal Server.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q2', this, true)">B. Tăng số lượng Worker Pods lắng nghe trên Task Queue xử lý tài liệu.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q2', this, false)">C. Mở thêm cổng mạng (Port) trên Nginx load balancer trước Worker.</button>
+        </div>
+        <div class="quiz-exp">
+          <strong>Chính xác!</strong> Bản chất <em>"Scale là scale worker"</em>: Toàn bộ task dồn vào Task Queue được giữ an toàn trên Server. Tăng số lượng Worker sẽ giúp tăng năng lực gắp task và xử lý đồng thời. Worker kết nối ra ngoài bằng Long-poll nên không cần mở port hay load balancer.
+        </div>
+      </div>
+
+      <!-- Question 3 -->
+      <div class="quiz-item" id="q3">
+        <div class="quiz-q">Câu 3: Temporal Server biết Workflow gồm những bước nào bằng cách nào nếu nó không hề lưu code Python của bạn?</div>
+        <div class="quiz-options">
+          <button class="quiz-opt" onclick="checkAnswer('q3', this, false)">A. Server tự dịch ngược file Python bytecode khi client gửi lên.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q3', this, true)">B. Thông qua cơ chế "Hỏi - Đáp từng bước": Server giao Workflow Task, Worker chạy code trong RAM đến đâu thì báo lệnh (Command) về cho Server đến đó.</button>
+          <button class="quiz-opt" onclick="checkAnswer('q3', this, false)">C. Lập trình viên phải khai báo sơ đồ JSON các bước thủ công lên Temporal Server.</button>
+        </div>
+        <div class="quiz-exp">
+          <strong>Chính xác!</strong> Server không có code. Khi cần chạy, Server phát tín hiệu cho Worker. Worker lôi hàm trong RAM ra chạy. Khi gặp <code>execute_activity</code>, Worker gửi một Command về báo: <i>"Tôi cần chạy activity này"</i>, lúc đó Server mới tạo Activity Task vào queue.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div>
+      Dự án: <strong>Xử Lý Dữ Liệu Đầu Vào & Trích Xuất Thông Tin Từ Tài Liệu</strong>
+    </div>
+    <div>
+      Liên kết: 
+      <a href="ban-chat-temporal.html">Bản chất Temporal</a> | 
+      <a href="index.html">Tài liệu chi tiết</a> |
+      <a href="mo-phong.html">Trang mô phỏng</a>
+    </div>
+  </footer>
+
+</div>
+
+<!-- SCRIPT FOR SIMULATOR & QUIZ -->
+<script>
+  // Simulation State
+  let queueCount = 0;
+  let completedCount = 0;
+  let taskIdSeq = 1;
+  let workers = [
+    { id: 1, name: "Worker-Pod-1", busy: false, currentTask: null },
+    { id: 2, name: "Worker-Pod-2", busy: false, currentTask: null }
+  ];
+
+  function renderWorkers() {
+    const container = document.getElementById('worker-pool-container');
+    container.innerHTML = '';
+    
+    workers.forEach(w => {
+      const node = document.createElement('div');
+      node.className = `worker-node ${w.busy ? 'busy' : ''}`;
+      node.innerHTML = `
+        <div class="worker-info">
+          <div class="worker-avatar">${w.busy ? '⚡' : '💤'}</div>
+          <div class="worker-stats">
+            <div class="worker-name">${w.name}</div>
+            <div class="worker-task-status">${w.busy ? `Đang xử lý: ${w.currentTask}` : 'Rảnh rỗi (Polling task...)'}</div>
+          </div>
+        </div>
+        <div>
+          <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-family: var(--font-mono); ${w.busy ? 'background: rgba(52, 211, 153, 0.2); color: #6ee7b7;' : 'background: rgba(148, 163, 184, 0.15); color: #94a3b8;'}">
+            ${w.busy ? 'BUSY' : 'IDLE'}
+          </span>
+        </div>
+      `;
+      container.appendChild(node);
+    });
+
+    document.getElementById('metric-workers').innerText = workers.length;
+    document.getElementById('worker-count-badge').innerText = `${workers.length} Pods`;
+    document.getElementById('metric-speed').innerText = `~${workers.length} docs/s`;
+  }
+
+  function renderQueue() {
+    const container = document.getElementById('queue-container');
+    const emptyMsg = document.getElementById('queue-empty-msg');
+    
+    document.getElementById('metric-queue').innerText = queueCount;
+    document.getElementById('queue-status-badge').innerText = `${queueCount} việc`;
+
+    if (queueCount === 0) {
+      container.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.id = 'queue-empty-msg';
+      empty.style = 'color: var(--text-dim); font-size: 12px; text-align: center; margin: auto; padding: 20px 0;';
+      empty.innerText = 'Queue đang trống. Bấm "+ 5 Tài Liệu" để thử!';
+      container.appendChild(empty);
+      return;
+    }
+
+    // Render items up to max 12 displayed
+    container.innerHTML = '';
+    const displayNum = Math.min(queueCount, 8);
+    for (let i = 0; i < displayNum; i++) {
+      const item = document.createElement('div');
+      item.className = 'queue-item';
+      item.innerHTML = `
+        <span>📄 Task #doc-${taskIdSeq - queueCount + i + 1}</span>
+        <span style="font-size: 9px; opacity: 0.8;">[Chờ Worker]</span>
+      `;
+      container.appendChild(item);
+    }
+
+    if (queueCount > 8) {
+      const more = document.createElement('div');
+      more.style = 'font-size: 11px; color: var(--text-muted); text-align: center; font-style: italic;';
+      more.innerText = `... và còn +${queueCount - 8} tasks nữa đang xếp hàng`;
+      container.appendChild(more);
+    }
+  }
+
+  function addTasks(num) {
+    for (let i = 0; i < num; i++) {
+      taskIdSeq++;
+      queueCount++;
+    }
+    renderQueue();
+  }
+
+  function addWorker() {
+    if (workers.length >= 8) {
+      alert("Đã đạt mức tối đa 8 Workers cho bài mô phỏng!");
+      return;
+    }
+    const newId = workers.length > 0 ? Math.max(...workers.map(w => w.id)) + 1 : 1;
+    workers.push({ id: newId, name: `Worker-Pod-${newId}`, busy: false, currentTask: null });
+    renderWorkers();
+  }
+
+  function removeWorker() {
+    if (workers.length <= 1) {
+      alert("Cần ít nhất 1 Worker để duy trì hệ thống!");
+      return;
+    }
+    workers.pop();
+    renderWorkers();
+  }
+
+  function resetSim() {
+    queueCount = 0;
+    completedCount = 0;
+    taskIdSeq = 1;
+    workers = [
+      { id: 1, name: "Worker-Pod-1", busy: false, currentTask: null },
+      { id: 2, name: "Worker-Pod-2", busy: false, currentTask: null }
+    ];
+    document.getElementById('metric-completed').innerText = completedCount;
+    renderWorkers();
+    renderQueue();
+  }
+
+  // Simulation tick loop (Every 600ms)
+  setInterval(() => {
+    let stateChanged = false;
+
+    workers.forEach(w => {
+      if (w.busy) {
+        // Complete current task
+        w.busy = false;
+        w.currentTask = null;
+        completedCount++;
+        document.getElementById('metric-completed').innerText = completedCount;
+        stateChanged = true;
+      } else if (queueCount > 0) {
+        // Grab task from queue
+        queueCount--;
+        w.busy = true;
+        w.currentTask = `OCR & trích xuất doc-${taskIdSeq - queueCount}`;
+        stateChanged = true;
+      }
+    });
+
+    if (stateChanged) {
+      renderWorkers();
+      renderQueue();
+    }
+  }, 900);
+
+  // Quiz evaluation
+  function checkAnswer(qId, btn, isCorrect) {
+    const parent = document.getElementById(qId);
+    const options = parent.querySelectorAll('.quiz-opt');
+    const exp = parent.querySelector('.quiz-exp');
+
+    options.forEach(opt => {
+      opt.disabled = true;
+      opt.classList.remove('correct', 'wrong');
+    });
+
+    if (isCorrect) {
+      btn.classList.add('correct');
+    } else {
+      btn.classList.add('wrong');
+      // Highlight the correct one
+      options.forEach(opt => {
+        if (opt.getAttribute('onclick').includes('true')) {
+          opt.classList.add('correct');
+        }
+      });
+    }
+
+    exp.classList.add('show');
+  }
+
+  // Initial render
+  renderWorkers();
+  renderQueue();
+</script>
+
+</body>
+</html>

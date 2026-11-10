@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chia và ghép tài liệu</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' } });
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mermaid svg { max-width: 100% !important; height: auto; }
+    code { background: #f1f5f9; padding: 0 .25rem; border-radius: .25rem; font-size: .8rem; }
+    pre code { background: none; padding: 0; }
+    td, th { vertical-align: top; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-5xl mx-auto space-y-6">
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center">
+      <span class="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full mb-2">
+        Indexing Worker (workflow) • Conversion Worker (convert-tq)
+      </span>
+      <h1 class="text-2xl font-bold text-slate-900">Chia tài liệu cho các worker và ghép lại</h1>
+      <p class="text-slate-500 text-sm mt-1">Mỗi phần đọc xong đều mang marker cho biết nó thuộc trang nào hoặc là ảnh nào, nên các phần xong trước hay sau đều ghép về đúng chỗ. Trang này đi tiếp từ <a class="text-blue-600 underline" href="phan-loai-file.html">phân loại file và chọn parser</a>.</p>
+      <div class="mt-3 flex flex-wrap justify-center gap-2">
+        <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-sky-100 text-sky-800 border-sky-200">Ingestion API</span> <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker · convert-tq</span> <span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-violet-100 text-violet-800 border-violet-200">Indexing Worker · ingest-tq / index-tq</span>
+      </div>
+      <nav class="mt-4 flex flex-wrap justify-center gap-2 text-xs">
+        <a href="#tong-quan" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">Tổng quan</a>
+        <a href="#chia" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">1. Chia</a>
+        <a href="#marker" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">2. Gắn marker</a>
+        <a href="#ghep" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">3. Ghép</a>
+        <a href="#vi-du" class="px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">Ví dụ</a>
+      </nav>
+    </div>
+
+    <!-- Tổng quan -->
+    <section id="tong-quan" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold text-slate-900">Tổng quan</h2><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-violet-100 text-violet-800 border-violet-200">Indexing Worker điều phối</span><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker làm việc</span></div>
+      <p class="text-sm text-slate-500 mt-1 mb-4">Workflow ở <code>packages/index/src/ingest/index/workflows/ingestion.py</code> giao một lượt toàn bộ việc vào hàng đợi <code>convert-tq</code>. Worker nào rảnh thì nhận, mỗi worker chạy tối đa 4 việc cùng lúc (<code>convert_max_concurrent_activities</code>). Workflow chờ tất cả xong (<code>asyncio.gather</code>) rồi mới ghép.</p>
+      <p class="text-sm text-slate-500 mb-4">Workflow chạy trong Indexing Worker và chỉ điều phối: nó quyết định gọi activity nào, với dữ liệu gì. Mọi việc đọc file đều do Conversion Worker làm. Hai bên chỉ trao đổi qua Temporal (vài con số, tên file) và MinIO (nội dung), không import code của nhau.</p>
+      <div class="mermaid flex justify-center overflow-x-auto">
+flowchart LR
+    subgraph IDXC["Indexing Worker (packages/index)"]
+      WF["DocumentIngestionWorkflow<br/>ingest-tq<br/>tạo OcrBatch, chờ gather"]
+      IX["chunk, embedding<br/>index-tq"]
+    end
+    subgraph TS["Temporal Server"]
+      Q[(Hàng đợi convert-tq)]
+    end
+    subgraph CONVC["Conversion Worker (packages/convert), 1 hay nhiều replica"]
+      D["detect_format<br/>lập ocr_page_batches"]
+      P["parse_document<br/>phần chữ (1 việc)"]:::txt
+      O0["ocr_pages lô 0"]:::ocr
+      ON["ocr_pages lô N"]:::ocr
+      FIN["finalize_markdown<br/>chèn ảnh, xếp trang"]:::fin
+    end
+    subgraph S3["MinIO"]
+      RAW["raw/ file gốc"]
+      MR["md-raw/{doc_id}/text.md<br/>md-raw/{doc_id}/ocr/0..N.md"]
+      MD(["md/{doc_id}.md"])
+    end
+    WF -- "① detect_format" --> Q --> D
+    D -. "trả ocr_page_batches" .-> WF
+    WF -- "② giao một lượt" --> Q
+    Q --> P & O0 & ON
+    RAW --> D & P & O0 & ON
+    P & O0 & ON --> MR
+    WF -- "③ sau khi tất cả xong" --> FIN
+    MR --> FIN --> MD
+    WF -- "④" --> IX
+    MD --> IX
+    style IDXC fill:#ede9fe,stroke:#7c3aed
+    style CONVC fill:#fef3c7,stroke:#d97706
+    style S3 fill:#f1f5f9,stroke:#64748b
+    style TS fill:#f8fafc,stroke:#94a3b8
+    classDef txt fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+    classDef ocr fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    classDef fin fill:#dcfce7,stroke:#22c55e,color:#14532d
+      </div>
+    </section>
+
+    <!-- 1. Chia -->
+    <section id="chia" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold text-slate-900">1. Quyết định chia ra sao</h2><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker · detect_format</span><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-violet-100 text-violet-800 border-violet-200">Indexing Worker · tạo OcrBatch</span></div>
+      <p class="text-sm text-slate-500 mt-1 mb-4">Activity <code>detect_format</code> (<code>activities.py:136</code>) không gửi ảnh đi. Nó chỉ trả về danh sách số, mỗi số chỉ tới một trang hoặc một ảnh, rồi cắt thành lô bằng <code>chunked(items, 10)</code> (<code>activities.py:49</code>). Kết quả là <code>FormatInfo.ocr_page_batches: list[list[int]]</code> (<code>packages/core/src/ingest/core/models.py:39</code>).</p>
+      <div class="overflow-x-auto">
+        <table class="text-sm w-full border border-slate-200">
+          <thead class="bg-slate-50"><tr><th class="p-2 text-left">Loại file</th><th class="p-2 text-left">Mỗi số trong lô là</th><th class="p-2 text-left">Code</th></tr></thead>
+          <tbody>
+            <tr class="border-t"><td class="p-2">pdf</td><td class="p-2">Số nhỏ hơn <code>page_count</code>: trang scan (dưới 20 ký tự chữ), OCR cả trang.<br/>Số từ <code>page_count</code> trở lên: hình thứ <code>số − page_count</code> trên trang có chữ (cạnh ngắn từ 1 inch, phủ không quá 85% trang).</td><td class="p-2"><code>parsers/pdf.py:23</code> <code>classify_pages</code><br/><code>parsers/pdf.py:67</code> <code>list_figures</code><br/><code>activities.py:146</code></td></tr>
+            <tr class="border-t"><td class="p-2">docx, pptx</td><td class="p-2">Chỉ số ảnh trong <code>image_slots()</code>, chỉ tính ảnh từ 2 KB</td><td class="p-2"><code>activities.py:246</code> <code>_ocr_slots</code></td></tr>
+            <tr class="border-t"><td class="p-2">xlsx</td><td class="p-2">Chỉ số ảnh trong <code>xlsx_media.list_images()</code></td><td class="p-2"><code>activities.py:164</code></td></tr>
+            <tr class="border-t"><td class="p-2">image</td><td class="p-2">Luôn là <code>[[0]]</code></td><td class="p-2"><code>activities.py:152</code></td></tr>
+            <tr class="border-t"><td class="p-2">html, text</td><td class="p-2">Không có lô nào</td><td class="p-2"><code>activities.py:171</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-slate-600 mt-4">Workflow (chạy trong Indexing Worker, <code>workflows/ingestion.py:159</code>) gói mỗi lô thành một <code>OcrBatch</code> (<code>models.py:50</code>) gồm <code>doc_id</code>, <code>pages</code> (lô số), <code>batch_index</code>, <code>raw_key</code>, <code>kind</code>, <code>pipeline_version</code>. Activity <code>ocr_pages</code> tự tải file gốc từ <code>raw_key</code> và tính lại danh sách trang, hình hay slot để biết mỗi số ứng với ảnh nào. Danh sách chỉ phụ thuộc nội dung file nên lần nào tính cũng ra cùng thứ tự, và dữ liệu đi qua Temporal chỉ là vài con số.</p>
+    </section>
+
+    <!-- 2. Marker -->
+    <section id="marker" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold text-slate-900">2. Mỗi phần tự gắn nhãn khi đọc xong</h2><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker · parse_document, ocr_pages</span></div>
+      <p class="text-sm text-slate-500 mt-1 mb-4">Có hai loại marker. Cả hai là comment HTML nên không hiện khi xem Markdown.</p>
+      <div class="grid sm:grid-cols-2 gap-4 mb-4">
+        <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <pre class="text-sm text-blue-900"><code>&lt;!-- page: 5 --&gt;</code></pre>
+          <p class="text-xs text-blue-800 mt-2">Đánh dấu trang. <code>page_marker()</code>, <code>packages/core/src/ingest/core/markdown.py:14</code>. Regex đọc lại: <code>PAGE_RE</code> (dòng 11).</p>
+        </div>
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <pre class="text-sm text-amber-900"><code>&lt;!-- image: pdf-figure-1 --&gt;</code></pre>
+          <p class="text-xs text-amber-800 mt-2">Đánh dấu ảnh. <code>image_marker()</code>, <code>parsers/docx_images.py:25</code>. Regex đọc lại: <code>MARKER_RE</code> (dòng 22).</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="text-sm w-full border border-slate-200">
+          <thead class="bg-slate-50"><tr><th class="p-2 text-left">Activity</th><th class="p-2 text-left">Gắn gì</th><th class="p-2 text-left">Code</th></tr></thead>
+          <tbody>
+            <tr class="border-t"><td class="p-2" rowspan="3"><code>parse_document</code><br/>(phần chữ)</td><td class="p-2"><code>page:</code> trước mỗi trang PDF có chữ</td><td class="p-2"><code>activities.py:200</code></td></tr>
+            <tr class="border-t"><td class="p-2">Chỗ hình trong trang PDF đổi thành <code>image: pdf-figure-N</code></td><td class="p-2"><code>parsers/pdf.py:117</code> <code>page_markdown_with_figures</code></td></tr>
+            <tr class="border-t"><td class="p-2">Placeholder ảnh docx của MarkItDown đổi thành <code>image: &lt;tên slot&gt;</code></td><td class="p-2"><code>parsers/docx_images.py:103</code> <code>mark_placeholders</code></td></tr>
+            <tr class="border-t"><td class="p-2" rowspan="3"><code>ocr_pages</code><br/>(mỗi lô)</td><td class="p-2"><code>page:</code> trước chữ OCR của trang scan</td><td class="p-2"><code>activities.py:296</code></td></tr>
+            <tr class="border-t"><td class="p-2"><code>image: pdf-figure-N</code> trước chữ của hình PDF</td><td class="p-2"><code>activities.py:285</code></td></tr>
+            <tr class="border-t"><td class="p-2"><code>image: &lt;tên ảnh&gt;</code> trước chữ của ảnh docx/pptx</td><td class="p-2"><code>activities.py:322</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-slate-600 mt-4">Mỗi activity lưu kết quả thành một file riêng trên MinIO. Tên file lấy từ <code>packages/core/src/ingest/core/keys.py:13-17</code>:</p>
+      <pre class="mt-2 bg-slate-900 text-slate-100 text-xs rounded-lg p-4 overflow-x-auto"><code>md-raw/{doc_id}/text.md     ← parse_document
+md-raw/{doc_id}/ocr/0.md    ← ocr_pages lô 0
+md-raw/{doc_id}/ocr/1.md    ← ocr_pages lô 1 ...</code></pre>
+    </section>
+
+    <!-- 3. Ghép -->
+    <section id="ghep" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold text-slate-900">3. Ghép lại</h2><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker · finalize_markdown</span></div>
+      <p class="text-sm text-slate-500 mt-1 mb-4">Activity <code>finalize_markdown</code> (<code>activities.py:425</code>) chạy trên Conversion Worker, do workflow bên Indexing Worker gọi sau khi mọi việc ở bước 1 đã xong. Worker nhận việc ghép không cần là worker đã OCR, vì các phần nằm trên MinIO.</p>
+      <div class="mermaid flex justify-center overflow-x-auto">
+flowchart TD
+    A["Đọc text.md, rồi ocr/0.md, ocr/1.md...<br/>theo batch_index tăng dần<br/><i>activities.py:427-430</i>"] --> B
+    B["place_docx_images()<br/><i>activities.py:94</i>"] --> B1["split_image_blocks()<br/>tách các khối image: X khỏi phần OCR<br/><i>docx_images.py:116</i>"]
+    B1 --> B2["place_images()<br/>thay marker image: X trong phần chữ<br/>bằng chữ đọc từ ảnh X<br/>ảnh không có chỗ thì nối cuối<br/><i>docx_images.py:125</i>"]
+    B2 --> C["merge_markdown()<br/><i>merge.py:53</i>"]
+    C --> C1["split_pages()<br/>cắt theo marker page: N<br/>gom vào dict {trang: nội dung}<br/><i>merge.py:11</i>"]
+    C1 --> C2["drop_repeated_edges()<br/>bỏ header/footer lặp<br/><i>merge.py:28</i>"]
+    C2 --> C3["sorted(pages): xếp theo số trang<br/>thêm front-matter<br/><i>merge.py:63</i>"]
+    C3 --> Z{"Tổng ký tự = 0?"}
+    Z -- có --> E[EMPTY_DOCUMENT]:::err
+    Z -- không --> OUT(["Lưu md/{doc_id}.md"]):::ok
+    classDef err fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+    classDef ok fill:#dcfce7,stroke:#22c55e,color:#14532d
+      </div>
+      <p class="text-sm text-slate-600 mt-4">Trang có chữ nằm trong <code>text.md</code>, trang scan nằm trong <code>ocr/*.md</code>. Khi <code>split_pages()</code> gom tất cả theo số trang, hai nguồn tự xen kẽ đúng chỗ. Phần không có marker trang (Office, html) được gom vào trang 0 và đứng đầu.</p>
+    </section>
+
+    <!-- Ví dụ -->
+    <section id="vi-du" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <h2 class="text-lg font-semibold text-slate-900">Ví dụ: PDF 3 trang, trang 2 là scan, trang 3 có một chart</h2>
+      <p class="text-sm text-slate-500 mt-1 mb-4"><code>page_count = 3</code>. Trang scan có chỉ số 1 (đếm từ 0), chart là hình đầu tiên nên mang số <code>3 + 0 = 3</code>. Vậy <code>ocr_page_batches = [[1, 3]]</code>: một lô, hai mục.</p>
+      <div class="mermaid flex justify-center overflow-x-auto">
+flowchart LR
+    subgraph T["text.md (parse_document)"]
+      direction TB
+      t1["page: 1<br/>Chữ trang 1"]
+      t3["page: 3<br/>Chữ trang 3<br/>image: pdf-figure-1"]
+    end
+    subgraph O["ocr/0.md (ocr_pages lô 0)"]
+      direction TB
+      o2["page: 2<br/>Chữ OCR trang 2"]
+      of["image: pdf-figure-1<br/>Chữ đọc từ chart (OCR hoặc VLM)"]
+    end
+    T --> M
+    O --> M
+    subgraph M["md/{doc_id}.md"]
+      direction TB
+      m1["page: 1 · Chữ trang 1"]
+      m2["page: 2 · Chữ OCR trang 2"]
+      m3["page: 3 · Chữ trang 3<br/>+ nội dung chart đúng chỗ hình"]
+      m1 --> m2 --> m3
+    end
+    style T fill:#eff6ff,stroke:#3b82f6
+    style O fill:#fffbeb,stroke:#f59e0b
+    style M fill:#f0fdf4,stroke:#22c55e
+      </div>
+    </section>
+
+    <p class="text-center text-xs text-slate-400">Đường dẫn ngắn (<code>activities.py</code>, <code>parsers/...</code>) nằm trong <code>packages/convert/src/ingest/convert/</code>. Xem thêm: <a class="underline" href="phan-loai-file.html">phân loại file</a> · <a class="underline" href="sequence_upload_to_vector.html">upload tới vector</a></p>
+  </div>
+</body>
+</html>

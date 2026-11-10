@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mô phỏng Temporal</title>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#1f2933;--mute:#6b7280;--line:#e2e5ea;
+  --wf:#7c3aed;--wf-bg:#ede9fe;--act:#d97706;--act-bg:#fef3c7;--ok:#16a34a;--ok-bg:#dcfce7;
+  --file:#2563eb;--file-bg:#dbeafe;--sig:#db2777;--sig-bg:#fce7f3;--dead:#9ca3af;
+  --code:#0f172a;--code-ink:#e2e8f0;--shadow:0 2px 6px rgba(0,0,0,.15);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1115;--card:#181b21;--ink:#e5e7eb;--mute:#9aa1ad;--line:#2a2f38;
+    --wf:#a78bfa;--wf-bg:#2e1f55;--act:#fbbf24;--act-bg:#3b2a0a;--ok:#4ade80;--ok-bg:#0f3320;
+    --file:#60a5fa;--file-bg:#132a52;--sig:#f472b6;--sig-bg:#4a1530;--dead:#4b5563;
+    --code:#0b0d11;--code-ink:#e2e8f0;--shadow:0 2px 6px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115;--card:#181b21;--ink:#e5e7eb;--mute:#9aa1ad;--line:#2a2f38;
+  --wf:#a78bfa;--wf-bg:#2e1f55;--act:#fbbf24;--act-bg:#3b2a0a;--ok:#4ade80;--ok-bg:#0f3320;
+  --file:#60a5fa;--file-bg:#132a52;--sig:#f472b6;--sig-bg:#4a1530;--dead:#4b5563;
+  --code:#0b0d11;--code-ink:#e2e8f0;--shadow:0 2px 6px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 16px;max-width:860px}
+a{color:var(--file)}
+code{font:12px ui-monospace,Menlo,monospace;background:var(--line);padding:0 4px;border-radius:4px}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;position:sticky;top:8px;z-index:30}
+button,select{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--wf);color:#fff;border-color:var(--wf)}
+button:disabled{opacity:.4;cursor:not-allowed}
+#sig:not(:disabled){background:var(--sig);color:#fff;border-color:var(--sig);animation:pulse 1.2s infinite}
+.controls label{display:flex;gap:6px;align-items:center;font-size:13px}
+.sep{flex:1}
+
+#narr{margin:12px 0;padding:12px 14px;border-left:4px solid var(--wf);background:var(--card);border-radius:8px;min-height:50px;transition:background .3s}
+#narr.new{background:var(--wf-bg)}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1050px){.main{grid-template-columns:minmax(0,1fr)}}
+#stage{position:relative;display:grid;grid-template-columns:1fr 1.1fr 1.35fr;gap:14px}
+@media (max-width:780px){#stage{grid-template-columns:minmax(0,1fr)}}
+.col h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);margin:0 0 8px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;position:relative}
+.box h3{margin:0;font-size:14px;display:flex;align-items:center;gap:6px}
+.note{font-size:12px;color:var(--mute)}
+.big{font-size:17px;font-weight:700;margin-top:2px}
+.srv{border:2px solid var(--wf)}
+.queue h3{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:4px;min-height:30px;margin-top:6px;padding:4px;border:1px dashed var(--line);border-radius:8px}
+.chips:empty::before{content:"trống";font-size:11px;color:var(--mute);padding:2px 4px}
+.chip,.tok{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap;color:var(--ink)}
+:is(.chip,.tok).wf{background:var(--wf-bg);border-color:var(--wf)}
+:is(.chip,.tok).act{background:var(--act-bg);border-color:var(--act)}
+:is(.chip,.tok).ok{background:var(--ok-bg);border-color:var(--ok)}
+:is(.chip,.tok).file{background:var(--file-bg);border-color:var(--file)}
+:is(.chip,.tok).sig{background:var(--sig-bg);border-color:var(--sig)}
+.tok{position:absolute;left:0;top:0;z-index:25;pointer-events:none;box-shadow:var(--shadow);font-weight:600}
+.files{margin:6px 0 0;padding:0;list-style:none;font:12px/1.6 ui-monospace,Menlo,monospace}
+.files li.new{color:var(--file);font-weight:700}
+
+.worker .hd{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.worker .hd button{padding:2px 10px;font-size:12px}
+.worker.dead{border-color:var(--dead)}
+.worker.dead .body{opacity:.35}
+.worker.dead .hd h3::after{content:"ĐÃ TẮT";font-size:10px;background:var(--dead);color:#fff;border-radius:4px;padding:1px 6px;margin-left:4px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;animation:pulse 1s infinite;flex:none}
+.dead .dot{background:var(--dead);animation:none}
+.slot{margin-top:6px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 8px;min-height:32px;transition:outline-color .2s;outline:2px solid transparent}
+.slot .lbl{display:flex;justify-content:space-between;gap:6px}
+.slot .lbl span:first-child{font-weight:600}
+.slot .hbt{color:var(--ok);font-size:11px;opacity:0;transition:opacity .15s}
+.slot.hb .hbt{opacity:1}
+.slot.busy.act-run{border-color:var(--act)}
+.slot.busy.wf-run{border-color:var(--wf)}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--act)}
+.wf-run .bar i{background:var(--wf)}
+.code{background:var(--code);color:var(--code-ink);border-radius:8px;padding:8px 4px;font:12px/1.7 ui-monospace,Menlo,monospace;margin-top:8px;overflow-x:auto}
+.code div{padding:0 8px;border-radius:4px;white-space:pre}
+.code .cur{background:#7c3aed;color:#fff}
+.code .wait{background:rgba(124,58,237,.35)}
+.code .replay{background:#d97706;color:#fff}
+
+#hist{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;position:sticky;top:70px;max-height:calc(100vh - 90px);display:flex;flex-direction:column}
+#hist h3{margin:0 0 2px;font-size:14px}
+#hist ol{list-style:none;margin:6px 0 0;padding:0;overflow-y:auto;font-size:12px;flex:1}
+#hist li{display:grid;grid-template-columns:26px 1fr;gap:4px;padding:3px 4px;border-bottom:1px solid var(--line);animation:fadein .4s}
+#hist li .n{color:var(--mute);text-align:right}
+#hist li .t{font-weight:600}
+#hist li .d{color:var(--mute);display:block}
+#hist li.wf .t{color:var(--wf)} #hist li.act .t{color:var(--act)} #hist li.ok .t{color:var(--ok)} #hist li.sig .t{color:var(--sig)}
+#hist li.flash{background:var(--act-bg)}
+@media (max-width:1050px){#hist{position:static;max-height:420px}}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;font-size:12px;align-items:center;color:var(--mute)}
+.ideas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:22px}
+.ideas .box p{margin:4px 0 0;font-size:13px}
+.try{margin-top:16px}
+.try ul{margin:6px 0 0;padding-left:18px}
+.try li{margin:3px 0}
+.foot{color:var(--mute);font-size:12px;margin-top:18px}
+@keyframes pulse{50%{opacity:.45}}
+@keyframes fadein{from{background:var(--wf-bg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Temporal chạy thế nào trong dự án này</h1>
+  <p class="sub">Mô phỏng một file PDF 25 trang scan đi từ lúc upload tới khi có vector. Mỗi token là một thứ đi qua lại giữa các container. Cột bên phải là lịch sử event mà Temporal Server ghi lại, giống tab Event History trong Temporal UI. Bạn có thể tắt worker giữa chừng để xem chuyện gì xảy ra. Phần lý thuyết chung xem ở <a href="index.html">trang giới thiệu Temporal</a>.</p>
+
+  <div class="controls">
+    <button id="play" class="primary">▶ Chạy</button>
+    <button id="reset">↺ Làm lại</button>
+    <label>Tốc độ
+      <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+    </label>
+    <label><input type="checkbox" id="review"> OCR tin cậy thấp (cần duyệt)</label>
+    <span class="sep"></span>
+    <button id="sig" disabled>Gửi signal Duyệt</button>
+  </div>
+
+  <div id="narr">Bấm <b>Chạy</b> để bắt đầu. Trong lúc chạy, bấm <b>Tắt</b> ở một worker để mô phỏng worker chết.</div>
+
+  <div class="main">
+    <div id="stage">
+      <div class="col">
+        <h2>Bên ngoài Temporal</h2>
+        <div class="box" id="user"><h3>👤 Người dùng</h3><div class="note">upload hop-dong.pdf</div></div>
+        <div class="box" id="api"><h3>Ingestion API</h3><div class="note">kiểm tra file, gọi start_workflow, gửi signal</div></div>
+        <div class="box" id="minio"><h3>MinIO</h3><div class="note">nội dung file, không đi qua Temporal</div><ul class="files" id="files"></ul></div>
+        <div class="box" id="db"><h3>Postgres (status)</h3><div class="note">trạng thái giao diện hiển thị</div><div class="big" id="dbv">–</div></div>
+        <div class="box" id="qdrant"><h3>Qdrant</h3><div class="big" id="qv">0 vector</div></div>
+      </div>
+
+      <div class="col">
+        <h2>Temporal Server</h2>
+        <div class="box srv" id="srv"><h3>Temporal Server</h3><div class="note">Ghi lịch sử, giữ hàng đợi, đếm timeout. Không chạy code của bạn.</div></div>
+        <div class="box queue" id="q-ingest-tq"><h3>ingest-tq</h3><div class="note">workflow task, update_status</div><div class="chips"></div></div>
+        <div class="box queue" id="q-convert-tq"><h3>convert-tq</h3><div class="note">detect, parse, OCR, finalize</div><div class="chips"></div></div>
+        <div class="box queue" id="q-index-tq"><h3>index-tq</h3><div class="note">chunk, embedding</div><div class="chips"></div></div>
+      </div>
+
+      <div class="col">
+        <h2>Worker (code của bạn)</h2>
+        <div class="box worker" id="w-idx">
+          <div class="hd"><h3><span class="dot"></span>Indexing Worker</h3><button data-k="idx">Tắt</button></div>
+          <div class="body">
+            <div class="note">poll: ingest-tq, index-tq</div>
+            <div class="code" id="code">
+              <div>await update_status("CONVERTING")</div>
+              <div>fmt = await detect_format(inp)</div>
+              <div>await gather(parse_document(), *ocr_pages(lô))</div>
+              <div>if OCR kém: await wait_condition(duyệt)</div>
+              <div>await finalize_markdown()</div>
+              <div>await update_status("CONVERTED"); index…</div>
+              <div>await update_status("INDEXED"); return</div>
+            </div>
+            <div class="slots"></div>
+          </div>
+        </div>
+        <div class="box worker" id="w-c1">
+          <div class="hd"><h3><span class="dot"></span>Conversion Worker #1</h3><button data-k="c1">Tắt</button></div>
+          <div class="body"><div class="note">poll: convert-tq</div><div class="slots"></div></div>
+        </div>
+        <div class="box worker" id="w-c2">
+          <div class="hd"><h3><span class="dot"></span>Conversion Worker #2</h3><button data-k="c2">Tắt</button></div>
+          <div class="body"><div class="note">poll: convert-tq</div><div class="slots"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="hist">
+      <h3>Event History <span id="evc" class="note">(0)</span></h3>
+      <div class="note">Chỉ ghi thêm, không sửa dòng cũ.</div>
+      <ol id="hl"></ol>
+    </aside>
+  </div>
+
+  <div class="legend">
+    <span class="chip wf">workflow task</span>
+    <span class="chip act">activity task</span>
+    <span class="chip ok">kết quả</span>
+    <span class="chip file">dữ liệu, file</span>
+    <span class="chip sig">signal</span>
+    <span>Dòng tím trong code là chỗ workflow đang chạy, tím nhạt là chỗ đang <code>await</code>, cam là đang replay.</span>
+  </div>
+
+  <div class="ideas">
+    <div class="box"><h3>Server không chạy code</h3><p>Temporal Server chỉ ghi lịch sử, giữ hàng đợi và đếm thời gian. Code workflow chạy trong Indexing Worker, code activity chạy trong Conversion Worker.</p></div>
+    <div class="box"><h3>Worker tự đi lấy việc</h3><p>Server không gọi tới worker. Worker liên tục poll hàng đợi của mình. Thêm một Conversion Worker là có thêm một bên lấy việc từ <code>convert-tq</code>, không phải cấu hình gì ở server.</p></div>
+    <div class="box"><h3>Workflow ngủ giữa các bước</h3><p>Sau mỗi <code>await</code>, workflow không chiếm worker. Khi activity xong, server tạo workflow task mới và worker chạy tiếp từ chỗ đó. Lúc chờ duyệt, workflow có thể nằm im nhiều ngày mà không tốn gì.</p></div>
+    <div class="box"><h3>Chết giữa chừng không mất việc</h3><p>Activity mất heartbeat thì server đưa lại vào hàng đợi cho worker khác. Indexing Worker khởi động lại thì đọc lịch sử và chạy lại code workflow (replay) để về đúng chỗ. Activity đã xong không chạy lại.</p></div>
+  </div>
+
+  <div class="box try">
+    <h3>Thử các tình huống</h3>
+    <ul>
+      <li>Tắt <b>Conversion Worker #1</b> khi nó đang chạy <code>ocr_pages</code>. Việc quay lại <code>convert-tq</code> và #2 làm tiếp.</li>
+      <li>Tắt <b>Indexing Worker</b> khi đang OCR. OCR vẫn xong, nhưng workflow task nằm chờ trong <code>ingest-tq</code>. Bật lại để xem replay.</li>
+      <li>Tắt cả hai Conversion Worker. Việc dồn lại trong <code>convert-tq</code> cho tới khi có worker bật lại.</li>
+      <li>Tick <b>OCR tin cậy thấp</b> trước khi chạy để xem workflow chờ signal.</li>
+    </ul>
+  </div>
+
+  <p class="foot">Tên activity, hàng đợi và thứ tự các bước lấy từ <code>packages/index/src/ingest/index/workflows/ingestion.py</code> và <code>packages/convert/src/ingest/convert/activities.py</code>. Số lô, số chunk, thời gian và timeout là số minh hoạ. Mỗi worker ở đây chạy 2 việc cùng lúc cho dễ nhìn; cấu hình thật của Conversion Worker là 4. Giống Temporal thật, event <code>ActivityTaskStarted</code> chỉ được ghi khi activity kết thúc, kèm số lần thử.</p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const stage = $('#stage');
+const S = { speed: 1, paused: true, started: false, ev: 0, needReplay: false, pendingWT: null, signal: null, line: -1, rr: 0 };
+const NAMES = { idx: 'Indexing Worker', c1: 'Conversion Worker #1', c2: 'Conversion Worker #2' };
+const W = {
+  idx: { el: $('#w-idx'), queues: ['ingest-tq', 'index-tq'], slots: [null, null], alive: true, gen: 0 },
+  c1:  { el: $('#w-c1'),  queues: ['convert-tq'], slots: [null, null], alive: true, gen: 0 },
+  c2:  { el: $('#w-c2'),  queues: ['convert-tq'], slots: [null, null], alive: true, gen: 0 },
+};
+const Q = { 'ingest-tq': [], 'convert-tq': [], 'index-tq': [] };
+
+for (const k in W) {
+  const box = W[k].el.querySelector('.slots');
+  W[k].slots.forEach(() => {
+    const d = document.createElement('div');
+    d.className = 'slot';
+    d.innerHTML = '<div class="lbl"><span class="nm note">rảnh</span><span class="hbt">♥ heartbeat</span></div><div class="bar"><i></i></div>';
+    box.appendChild(d);
+  });
+}
+const slotEl = (k, i) => W[k].el.querySelectorAll('.slot')[i];
+const ok = (k, g) => W[k].alive && W[k].gen === g;
+
+async function sleep(ms) {
+  let left = ms;
+  while (left > 0) {
+    if (S.paused) { await new Promise(r => setTimeout(r, 100)); continue; }
+    const step = Math.min(50, left);
+    await new Promise(r => setTimeout(r, step / S.speed));
+    left -= step;
+  }
+}
+
+function center(el) {
+  const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  return { x: r.left - s.left + r.width / 2, y: r.top - s.top + Math.min(r.height / 2, 24) };
+}
+async function fly(label, cls, fromEl, toEl) {
+  const t = document.createElement('div');
+  t.className = 'tok ' + cls;
+  t.textContent = label;
+  stage.appendChild(t);
+  const a = center(fromEl), b = center(toEl);
+  t.style.transform = `translate(${a.x}px,${a.y}px) translate(-50%,-50%)`;
+  t.getBoundingClientRect();
+  t.style.transition = `transform ${700 / S.speed}ms ease-in-out`;
+  t.style.transform = `translate(${b.x}px,${b.y}px) translate(-50%,-50%)`;
+  await sleep(700);
+  t.remove();
+}
+
+function narr(text) {
+  const n = $('#narr');
+  n.textContent = text;
+  n.classList.add('new');
+  setTimeout(() => n.classList.remove('new'), 500);
+}
+function logEv(type, detail, cls) {
+  S.ev++;
+  const li = document.createElement('li');
+  li.className = cls;
+  li.innerHTML = `<span class="n">${S.ev}</span><span><span class="t">${type}</span><span class="d">${detail}</span></span>`;
+  $('#hl').appendChild(li);
+  $('#hl').scrollTop = $('#hl').scrollHeight;
+  $('#evc').textContent = `(${S.ev})`;
+}
+function addFile(name) {
+  document.querySelectorAll('#files li').forEach(l => l.classList.remove('new'));
+  const li = document.createElement('li');
+  li.className = 'new';
+  li.textContent = name;
+  $('#files').appendChild(li);
+}
+function setLine(n, cls) {
+  S.line = n;
+  document.querySelectorAll('#code div').forEach((d, i) => { d.className = i === n ? cls : ''; });
+}
+function setSlot(k, i, label, kind) {
+  const s = slotEl(k, i);
+  s.className = 'slot busy ' + (kind === 'wf' ? 'wf-run' : 'act-run');
+  s.querySelector('.nm').textContent = label;
+  s.querySelector('.nm').classList.remove('note');
+  s.querySelector('.bar i').style.width = '0';
+}
+function clearSlot(k, i) {
+  W[k].slots[i] = null;
+  const s = slotEl(k, i);
+  s.className = 'slot';
+  s.querySelector('.nm').textContent = 'rảnh';
+  s.querySelector('.nm').classList.add('note');
+  s.querySelector('.bar i').style.width = '0';
+}
+
+// Hàng đợi: worker còn sống và còn chỗ trống thì nhận việc
+function enqueue(qn, label, cls) {
+  return new Promise(res => {
+    const chip = document.createElement('span');
+    chip.className = 'chip ' + cls;
+    chip.textContent = label;
+    $('#q-' + qn + ' .chips').appendChild(chip);
+    Q[qn].push({ label, chip, res });
+  });
+}
+function dispatch() {
+  if (S.paused) return;
+  for (const qn in Q) {
+    while (Q[qn].length) {
+      const cands = Object.keys(W)
+        .filter(k => W[k].alive && W[k].queues.includes(qn) && W[k].slots.includes(null))
+        .map(k => ({ k, free: W[k].slots.filter(x => x === null).length }));
+      if (!cands.length) break;
+      S.rr++;
+      cands.sort((a, b) => b.free - a.free || ((a.k > b.k) === (S.rr % 2 === 0) ? 1 : -1));
+      const k = cands[0].k;
+      const item = Q[qn].shift();
+      item.chip.remove();
+      const i = W[k].slots.indexOf(null);
+      W[k].slots[i] = item.label;
+      item.res({ k, i });
+    }
+  }
+}
+setInterval(dispatch, 200);
+
+async function work(k, i, g, units, kind) {
+  const s = slotEl(k, i), bar = s.querySelector('.bar i');
+  const n = units * 8;
+  for (let u = 1; u <= n; u++) {
+    await sleep(110);
+    if (!ok(k, g)) return false;
+    bar.style.width = (u / n * 100) + '%';
+    if (kind === 'act' && u % 4 === 0) {
+      s.classList.add('hb');
+      setTimeout(() => s.classList.remove('hb'), 250);
+    }
+  }
+  return true;
+}
+
+async function activity(name, qn, o = {}) {
+  await fly(name, 'act', W.idx.el, $('#q-' + qn));
+  logEv('ActivityTaskScheduled', `${name} · ${qn}`, 'act');
+  for (let attempt = 1; ; attempt++) {
+    const { k, i } = await enqueue(qn, name, 'act');
+    const g = W[k].gen, sl = slotEl(k, i);
+    await fly(name, 'act', $('#q-' + qn), sl);
+    let done = ok(k, g);
+    if (done) {
+      setSlot(k, i, name, 'act');
+      if (o.reads) await fly(o.reads, 'file', $('#minio'), sl);
+      done = ok(k, g) && await work(k, i, g, o.units || 2, 'act');
+    }
+    if (!done) {
+      narr(`${NAMES[k]} tắt khi đang chạy ${name}. Server không thấy heartbeat nữa, hết timeout thì đưa việc lại vào ${qn} (lần thử ${attempt + 1}). Worker nào còn sống sẽ nhận.`);
+      await sleep(2500);
+      continue;
+    }
+    if (o.writes) {
+      await fly(o.writes, 'file', sl, $(o.to || '#minio'));
+      if (o.onWrite) o.onWrite();
+    }
+    clearSlot(k, i);
+    await fly('kết quả', 'ok', sl, $('#srv'));
+    logEv('ActivityTaskStarted', `${NAMES[k]} · lần thử ${attempt}`, 'act');
+    logEv('ActivityTaskCompleted', o.result || name, 'ok');
+    return;
+  }
+}
+
+async function replay() {
+  S.needReplay = false;
+  narr('Indexing Worker vừa khởi động lại nên không còn workflow trong bộ nhớ. Nó tải toàn bộ lịch sử từ server và chạy lại code workflow từ đầu (replay). Gặp activity đã có kết quả trong lịch sử thì lấy luôn kết quả, không chạy lại.');
+  const items = [...document.querySelectorAll('#hl li')];
+  for (const li of items) { li.classList.add('flash'); await sleep(40); }
+  const upto = Math.max(S.line, 0);
+  for (let l = 0; l <= upto; l++) { setLine(l, 'replay'); await sleep(350); }
+  items.forEach(li => li.classList.remove('flash'));
+}
+
+// Workflow task: các activity xong cùng lúc dùng chung một workflow task chưa được nhận
+function wake(line, note) {
+  if (S.pendingWT) return S.pendingWT;
+  const p = (async () => {
+    logEv('WorkflowTaskScheduled', 'ingest-tq', 'wf');
+    for (;;) {
+      const { k, i } = await enqueue('ingest-tq', 'workflow task', 'wf');
+      if (S.pendingWT === p) S.pendingWT = null;
+      const g = W[k].gen, sl = slotEl(k, i);
+      await fly('workflow task', 'wf', $('#q-ingest-tq'), sl);
+      if (!ok(k, g)) { await sleep(1500); continue; }
+      setSlot(k, i, 'workflow task', 'wf');
+      if (S.needReplay) await replay();
+      logEv('WorkflowTaskStarted', NAMES[k], 'wf');
+      const ln = typeof line === 'function' ? line() : line;
+      setLine(ln, 'cur');
+      narr(typeof note === 'function' ? note() : note);
+      const done = await work(k, i, g, 2, 'wf');
+      if (!done) {
+        narr('Indexing Worker tắt khi đang chạy workflow task. Hết workflow task timeout, server đưa workflow task lại vào ingest-tq. Chưa có worker nào nhận thì nó nằm chờ ở đó.');
+        await sleep(1500);
+        continue;
+      }
+      await sleep(600);
+      clearSlot(k, i);
+      logEv('WorkflowTaskCompleted', 'gửi command về server', 'wf');
+      setLine(ln, 'wait');
+      return;
+    }
+  })();
+  S.pendingWT = p;
+  return p;
+}
+
+async function status(s) {
+  await activity('update_status', 'ingest-tq', {
+    units: 1, writes: s, to: '#db', result: `status = ${s}`,
+    onWrite: () => { $('#dbv').textContent = s; },
+  });
+}
+
+async function main() {
+  const review = $('#review').checked;
+  $('#review').disabled = true;
+  narr('Người dùng upload hop-dong.pdf, một file PDF 25 trang scan.');
+  await fly('hop-dong.pdf', 'file', $('#user'), $('#api'));
+  narr('Ingestion API kiểm tra file, lưu bản gốc lên MinIO và ghi status RECEIVED. Nội dung file không bao giờ đi qua Temporal.');
+  await fly('raw/', 'file', $('#api'), $('#minio'));
+  addFile('raw/doc/hop-dong.pdf');
+  await fly('RECEIVED', 'file', $('#api'), $('#db'));
+  $('#dbv').textContent = 'RECEIVED';
+  await sleep(500);
+  narr('API gọi start_workflow rồi trả lời người dùng ngay. Server tạo workflow, ghi event đầu tiên và đặt một workflow task vào ingest-tq.');
+  await fly('start_workflow', 'wf', $('#api'), $('#srv'));
+  logEv('WorkflowExecutionStarted', 'DocumentIngestionWorkflow · ingest-tq', 'wf');
+
+  await wake(0, 'Indexing Worker poll được workflow task. Nó chạy code workflow tới await đầu tiên, gửi command "chạy update_status" về server rồi nhả workflow ra.');
+  await status('CONVERTING');
+  await wake(1, 'update_status xong nên server tạo workflow task mới. Workflow chạy tiếp tới dòng kế và ra lệnh detect_format trên convert-tq.');
+  await activity('detect_format', 'convert-tq', { reads: 'raw', units: 2, result: 'ocr_page_batches: 3 lô' });
+
+  let left = 4;
+  await wake(2, 'detect_format trả về 3 lô trang scan. Workflow ra lệnh một lượt 4 activity: parse_document và 3 ocr_pages. Hai Conversion Worker chia nhau làm.');
+  const one = async (name, o) => {
+    await activity(name, 'convert-tq', o);
+    left--;
+    await wake(() => (left > 0 ? 2 : review ? 3 : 4),
+      () => (left > 0 ? `Một activity xong, workflow thức dậy kiểm tra: gather còn chờ ${left} việc nên chưa ra lệnh gì mới.` : 'Đủ cả 4 kết quả, gather xong, workflow đi tiếp.'));
+  };
+  await Promise.all([
+    one('parse_document', { reads: 'raw', units: 2, writes: 'text.md', onWrite: () => addFile('md-raw/doc/text.md') }),
+    ...[0, 1, 2].map(b => one(`ocr_pages lô ${b}`, {
+      reads: 'raw', units: b < 2 ? 6 : 4, writes: `ocr/${b}.md`, onWrite: () => addFile(`md-raw/doc/ocr/${b}.md`),
+    })),
+  ]);
+
+  if (review) {
+    await status('NEEDS_REVIEW');
+    await wake(3, 'Độ tin cậy OCR thấp. Workflow dừng ở wait_condition chờ signal review_decision. Không worker nào bị giữ, workflow chỉ nằm trong lịch sử trên server.');
+    $('#sig').disabled = false;
+    narr('Workflow đang chờ người duyệt, có thể chờ nhiều ngày. Bấm "Gửi signal Duyệt" để mô phỏng người dùng bấm Duyệt trên giao diện.');
+    await new Promise(r => { S.signal = r; });
+    $('#sig').disabled = true;
+    await fly('signal: approve', 'sig', $('#api'), $('#srv'));
+    logEv('WorkflowExecutionSignaled', 'review_decision = approve', 'sig');
+    await wake(4, 'Signal được ghi vào lịch sử và đánh thức workflow. Workflow thấy _review = approve và đi tiếp.');
+  }
+
+  await activity('finalize_markdown', 'convert-tq', { reads: 'md-raw', units: 2, writes: 'md/doc.md', onWrite: () => addFile('md/doc.md') });
+  await wake(5, 'Đã có file Markdown cuối. Workflow cập nhật status CONVERTED.');
+  await status('CONVERTED');
+  await wake(5, 'Sang phần index. Các activity này nằm trên index-tq, nên chính Indexing Worker nhận.');
+  await activity('chunk_markdown', 'index-tq', { reads: 'md', units: 2, result: '12 chunk' });
+  await wake(5, 'Có chunk. Workflow ra lệnh embed_and_upsert.');
+  await activity('embed_and_upsert', 'index-tq', { units: 3, writes: 'vector', to: '#qdrant', onWrite: () => { $('#qv').textContent = '12 vector'; } });
+  await wake(6, 'Đã ghi vector. Workflow cập nhật status INDEXED.');
+  await status('INDEXED');
+  await wake(6, 'Workflow return. Server ghi event cuối cùng.');
+  logEv('WorkflowExecutionCompleted', 'status INDEXED', 'ok');
+  setLine(6, 'cur');
+  narr(`Xong. Lịch sử có ${S.ev} event. Bấm "Làm lại" để chạy lại và thử tắt worker giữa chừng.`);
+  $('#play').disabled = true;
+}
+
+$('#play').onclick = () => {
+  S.paused = !S.paused;
+  $('#play').textContent = S.paused ? '▶ Chạy tiếp' : '⏸ Tạm dừng';
+  if (!S.started) { S.started = true; main(); }
+};
+$('#reset').onclick = () => location.reload();
+$('#speed').onchange = e => { S.speed = +e.target.value; };
+$('#sig').onclick = () => { if (S.signal) { S.signal(); S.signal = null; } };
+document.querySelectorAll('.worker .hd button').forEach(b => {
+  b.onclick = () => {
+    const k = b.dataset.k, w = W[k];
+    if (w.alive) {
+      w.alive = false;
+      w.gen++;
+      w.slots.forEach((_, i) => clearSlot(k, i));
+      w.el.classList.add('dead');
+      b.textContent = 'Bật';
+      narr(`${NAMES[k]} đã tắt. Việc nó đang làm dở sẽ bị coi là hỏng sau khi hết timeout. Việc mới trong hàng đợi của nó nằm chờ, trừ khi có worker khác cùng poll hàng đợi đó.`);
+    } else {
+      w.alive = true;
+      w.el.classList.remove('dead');
+      b.textContent = 'Tắt';
+      if (k === 'idx') S.needReplay = true;
+      narr(`${NAMES[k]} chạy lại và bắt đầu poll hàng đợi.` + (k === 'idx' ? ' Workflow task tiếp theo nó nhận sẽ bắt đầu bằng replay.' : ''));
+    }
+  };
+});
+</script>
+</body>
+</html>

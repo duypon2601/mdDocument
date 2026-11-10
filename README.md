@@ -60,7 +60,9 @@ uv run ingest cancel <id>
 
 ## Giao diện web
 
-Giao diện là React SPA trong `web/`. API phục vụ bản build ở `/` (các route `/files`, `/files/<doc_id>`, `/search` cũng trả về SPA). Chưa build thì `/` rơi về trang tĩnh cũ `static/index.html`.
+Giao diện là React SPA trong `web/`. API phục vụ bản build ở `/` (các route `/files`, `/files/<doc_id>`, `/search`, `/queues` cũng trả về SPA). Chưa build thì `/` rơi về trang tĩnh cũ `static/index.html`.
+
+Trang `/queues` hiện các task queue của Temporal: worker nào đang nghe, bao nhiêu task đang chờ, workflow nào đang chạy và activity nào của nó đang chờ hay đang chạy. Dữ liệu lấy từ `GET /temporal/queues`. Header trang nào cũng có một dòng tóm tắt, chấm đỏ nghĩa là queue thiếu worker.
 
 ```bash
 cd web
