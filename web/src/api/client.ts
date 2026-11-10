@@ -7,6 +7,7 @@ import type {
   DocumentList,
   ListParams,
   Profile,
+  QueueSnapshot,
   ReindexResult,
   SearchRequest,
   SearchResponse,
@@ -104,6 +105,10 @@ export const api = {
 
   getStats(): Promise<Stats> {
     return json('/stats')
+  },
+
+  getQueues(): Promise<QueueSnapshot> {
+    return json('/temporal/queues')
   },
 
   upload(file: File, profile: Profile): Promise<UploadResult> {

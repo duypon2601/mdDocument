@@ -16,6 +16,7 @@ export default defineConfig({
     proxy: {
       '/documents': API,
       '/stats': API,
+      '/temporal': API,
       '/search': {
         target: API,
         bypass: (req) => (req.method === 'GET' ? '/index.html' : undefined),

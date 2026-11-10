@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { STATUSES, type Document, type Stats } from '../api/types'
+import { STATUSES, type Document, type QueuePart, type QueueSnapshot, type Stats } from '../api/types'
 
 /** Dữ liệu mẫu đúng hợp đồng API. Test có thể ghi đè bằng server.use(...). */
 export const sampleDocs: Document[] = [
@@ -37,6 +37,49 @@ export function sampleStats(): Stats {
   const by_status = Object.fromEntries(STATUSES.map((s) => [s, 0])) as Stats['by_status']
   for (const d of sampleDocs) by_status[d.status]++
   return { total: sampleDocs.length, chunks: 12, by_status }
+}
+
+const part = (identities: string[], backlog = 0): QueuePart => ({
+  pollers: identities.map((identity) => ({ identity, last_access: '2026-11-10T03:00:00Z' })),
+  backlog,
+  backlog_age_s: backlog ? 42 : 0,
+  add_rate: 0,
+  dispatch_rate: 0,
+})
+
+/** Mẫu: convert-tq không có worker và có 3 task chờ; một workflow đang chờ OCR. */
+export function sampleQueues(): QueueSnapshot {
+  return {
+    fetched_at: '2026-11-10T03:00:05Z',
+    queues: [
+      { name: 'ingest-tq', expects_workflow: true, workflow: part(['8@index']), activity: part(['8@index']) },
+      { name: 'convert-tq', expects_workflow: false, workflow: part([]), activity: part([], 3) },
+      { name: 'index-tq', expects_workflow: false, workflow: part([]), activity: part(['8@index']) },
+    ],
+    running: [
+      {
+        workflow_id: `ingest-${sampleDocs[1].doc_id}`,
+        workflow_type: 'DocumentIngestionWorkflow',
+        doc_id: sampleDocs[1].doc_id,
+        file_name: sampleDocs[1].file_name,
+        status: 'CONVERTING',
+        started_at: '2026-11-10T02:58:05Z',
+        activities: [
+          {
+            name: 'ocr_pages',
+            task_queue: 'convert-tq',
+            state: 'SCHEDULED',
+            attempt: 2,
+            scheduled_at: '2026-11-10T02:59:05Z',
+            started_at: null,
+            worker: null,
+            last_failure: 'timeout',
+          },
+        ],
+      },
+    ],
+    running_truncated: false,
+  }
 }
 
 const notFound = () => HttpResponse.json({ detail: 'Không tìm thấy tài liệu' }, { status: 404 })
@@ -140,6 +183,8 @@ export const handlers = [
   ),
 
   http.get('/stats', () => HttpResponse.json(sampleStats())),
+
+  http.get('/temporal/queues', () => HttpResponse.json(sampleQueues())),
 
   http.post('/search', async ({ request }) => {
     const body = (await request.json()) as { query: string }

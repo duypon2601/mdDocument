@@ -28,7 +28,7 @@ def dist(tmp_path):
     return tmp_path
 
 
-@pytest.mark.parametrize("path", ["/", "/files", "/files/abc", "/files/abc/x", "/search"])
+@pytest.mark.parametrize("path", ["/", "/files", "/files/abc", "/files/abc/x", "/search", "/queues"])
 def test_spa_routes_return_index(dist, path):
     r = make_client(dist).get(path)
     assert r.status_code == 200 and "<title>spa</title>" in r.text

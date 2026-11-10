@@ -14,6 +14,7 @@ const DocumentPage = lazy(() =>
   import('./pages/document/DocumentPage').then((m) => ({ default: m.DocumentPage })),
 )
 const SearchPage = lazy(() => import('./pages/search/SearchPage').then((m) => ({ default: m.SearchPage })))
+const QueuesPage = lazy(() => import('./pages/queues/QueuesPage').then((m) => ({ default: m.QueuesPage })))
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -33,6 +34,7 @@ export function App() {
             <Route path="files" element={<FilesPage />} />
             <Route path="files/:docId" element={<DocumentPage />} />
             <Route path="search" element={<SearchPage />} />
+            <Route path="queues" element={<QueuesPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

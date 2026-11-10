@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import { ConnectionBanner } from './ConnectionBanner'
+import { QueueStrip } from './QueueStrip'
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { Skeleton } from './Skeleton'
 
@@ -8,6 +9,7 @@ const LINKS = [
   { to: '/', label: 'Tổng quan', end: true },
   { to: '/files', label: 'Tài liệu', end: false },
   { to: '/search', label: 'Tìm kiếm thử', end: false },
+  { to: '/queues', label: 'Hàng đợi', end: false },
 ]
 
 export function Layout() {
@@ -40,6 +42,9 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          <div className="ml-auto">
+            <QueueStrip />
+          </div>
         </div>
       </header>
       <main id="main" className="mx-auto max-w-6xl px-4 py-6">

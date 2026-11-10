@@ -28,6 +28,7 @@ export const keys = {
   markdown: (id: string, stamp = '') => ['documents', 'markdown', id, stamp] as const,
   chunks: (id: string, p: ChunkParams) => ['documents', 'chunks', id, p] as const,
   stats: ['stats'] as const,
+  queues: ['queues'] as const,
 }
 
 const pollList = (data: DocumentList | undefined) =>
@@ -63,6 +64,18 @@ export function useStats() {
     queryKey: keys.stats,
     queryFn: api.getStats,
     refetchInterval: (q) => pollStats(q.state.data),
+  })
+}
+
+/** Trang Hàng đợi và thanh nhỏ trên header dùng chung một query. */
+export const POLL_QUEUES_MS = 2000
+
+export function useQueues() {
+  return useQuery({
+    queryKey: keys.queues,
+    queryFn: api.getQueues,
+    refetchInterval: POLL_QUEUES_MS,
+    retry: false,
   })
 }
 

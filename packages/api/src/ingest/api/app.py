@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from ingest.api.dedup import compute_doc_id, is_legacy, profile_of
+from ingest.api.queues import QueueInspector
 from ingest.api.search import QdrantSearcher, Searcher, SearchUnavailable
 from ingest.api.validator import ValidationError, safe_name, validate_upload
 from ingest.api.workflow_client import WorkflowClient, active_workflow_id
@@ -63,6 +64,7 @@ def create_app(
     settings: Settings | None = None,
     searcher: Searcher | None = None,
     static_dir: Path | None = None,
+    queue_inspector: QueueInspector | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     app = FastAPI(title="Ingestion API")
@@ -171,6 +173,21 @@ def create_app(
         total, chunks, by_status = repo.stats()
         return {"total": total, "chunks": chunks, "by_status": by_status}
 
+    @app.get("/temporal/queues")
+    async def queues() -> JSONResponse:
+        """Worker, backlog từng task queue và workflow đang chạy, đọc thẳng từ Temporal."""
+        if queue_inspector is None:
+            return _temporal_unavailable("Chưa cấu hình Temporal")
+        try:
+            snap = await queue_inspector.snapshot()
+        except Exception as exc:
+            return _temporal_unavailable(str(exc) or type(exc).__name__)
+        for w in snap["running"]:
+            rec = repo.get(w["doc_id"]) if w.get("doc_id") else None
+            w["file_name"] = rec.file_name if rec else None
+            w["status"] = rec.status if rec else None
+        return JSONResponse(snap)
+
     @app.post("/documents/cancel-running", status_code=202)
     async def cancel_running() -> dict:
         requested: list[str] = []
@@ -222,6 +239,7 @@ def create_app(
         @app.get("/files", include_in_schema=False)
         @app.get("/files/{path:path}", include_in_schema=False)
         @app.get("/search", include_in_schema=False)
+        @app.get("/queues", include_in_schema=False)
         def spa() -> FileResponse:
             return FileResponse(spa_index)
 
@@ -333,6 +351,10 @@ def create_app(
     return app
 
 
+def _temporal_unavailable(detail: str) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"code": "TEMPORAL_UNAVAILABLE", "detail": detail})
+
+
 def _search_unavailable(detail: str) -> JSONResponse:
     return JSONResponse(status_code=503, content={"code": "SEARCH_UNAVAILABLE", "detail": detail})
 
@@ -357,7 +379,12 @@ def create_default_app() -> FastAPI:
         s.embed_api_key,
         s.embed_model,
     )
-    return create_app(storage, repo, wf, s, searcher)
+    from ingest.api.queues import LazyQueueInspector
+
+    inspector = LazyQueueInspector(
+        s.temporal_address, s.temporal_namespace, [s.ingest_tq, s.convert_tq, s.index_tq]
+    )
+    return create_app(storage, repo, wf, s, searcher, queue_inspector=inspector)
 
 
 class _LazyWorkflowClient:

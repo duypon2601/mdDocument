@@ -122,3 +122,62 @@ export interface CancelResult {
   doc_id: string
   cancel_requested: boolean
 }
+
+/** GET /temporal/queues: đọc thẳng từ Temporal. */
+export interface QueuePoller {
+  identity: string
+  last_access: string | null
+}
+
+export interface QueuePart {
+  pollers: QueuePoller[]
+  /** Số task đang chờ worker nhận (ước lượng của Temporal). */
+  backlog: number
+  backlog_age_s: number
+  add_rate: number
+  dispatch_rate: number
+}
+
+export interface QueueInfo {
+  name: string
+  /** Chỉ queue chạy workflow mới cần worker cho phần workflow. */
+  expects_workflow: boolean
+  workflow: QueuePart
+  activity: QueuePart
+}
+
+export type ActivityState =
+  | 'SCHEDULED'
+  | 'STARTED'
+  | 'CANCEL_REQUESTED'
+  | 'PAUSED'
+  | 'PAUSE_REQUESTED'
+  | 'UNKNOWN'
+
+export interface PendingActivity {
+  name: string
+  task_queue: string | null
+  state: ActivityState
+  attempt: number
+  scheduled_at: string | null
+  started_at: string | null
+  worker: string | null
+  last_failure: string | null
+}
+
+export interface RunningWorkflow {
+  workflow_id: string
+  workflow_type: string
+  doc_id: string | null
+  file_name: string | null
+  status: Status | null
+  started_at: string | null
+  activities: PendingActivity[]
+}
+
+export interface QueueSnapshot {
+  fetched_at: string
+  queues: QueueInfo[]
+  running: RunningWorkflow[]
+  running_truncated: boolean
+}
