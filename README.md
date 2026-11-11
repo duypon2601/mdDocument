@@ -81,7 +81,7 @@ Màn hình gồm Tổng quan, Tài liệu (upload, luôn xử lý theo v2; lọc
 
 | Endpoint | Việc |
 |---|---|
-| `POST /documents`, `POST /documents/batch` | Upload (form `pipeline_version`, `extract_media`) |
+| `POST /documents`, `POST /documents/batch` | Upload (form `file`) |
 | `GET /documents`, `GET /documents/{id}`, `GET /stats` | Danh sách, chi tiết kèm tiến độ, số liệu tổng quan |
 | `GET /documents/{id}/markdown`, `/chunks`, `/raw` | Markdown cuối, chunk (phân trang, chọn `version`), tải file gốc |
 | `POST /documents/{id}/review?decision=approve\|reject`, `/reindex`, `/cancel` | Duyệt, re-index, dừng một tài liệu |
@@ -99,10 +99,10 @@ Test dùng bản giả của storage, embedder và OCR, DB chạy sqlite, nên k
 ## Extras
 
 ```bash
-uv sync --extra docling --extra ocr
+uv sync --extra docling
 ```
 
-`docling` thêm parser nặng hơn, `ocr` cài RapidOCR.
+`docling` thêm parser nặng hơn. OCR dùng Tesseract cài ngoài Python, cần gói `vie` (macOS: `brew install tesseract tesseract-lang`, Debian: `apt install tesseract-ocr tesseract-ocr-vie`).
 
 ## Nguồn mã
 

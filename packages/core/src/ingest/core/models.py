@@ -15,10 +15,6 @@ class IngestInput:
     review_timeout_days: int = 7
     index_version: int = 1
     embedding_model: str = ""
-    extract_media: bool = True  # False: bản cũ, không bóc ảnh/chart/công thức
-    # 1: chọn OCR/VLM như trước chỉnh sửa; 2: thêm phát hiện sai dấu, gọi lại khi 429,
-    # thu nhỏ ảnh trước khi gửi VLM. Giữ cả hai để so sánh output trên giao diện.
-    pipeline_version: int = 2
 
 
 @dataclass
@@ -53,7 +49,6 @@ class OcrBatch:
     batch_index: int = 0
     raw_key: str = ""
     kind: str = "pdf"
-    pipeline_version: int = 2
 
 
 @dataclass

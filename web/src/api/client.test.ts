@@ -1,16 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/server'
-import { api, ApiError, profileFields } from './client'
-
-describe('profileFields', () => {
-  it.each([
-    ['v2', true, 2],
-    ['v1', true, 1],
-    ['legacy', false, 2],
-  ] as const)('%s', (profile, extract_media, pipeline_version) => {
-    expect(profileFields(profile)).toEqual({ extract_media, pipeline_version })
-  })
-})
+import { api, ApiError } from './client'
 
 describe('api client', () => {
   it('listDocuments gửi status nhiều giá trị cách nhau bằng dấu phẩy', async () => {
@@ -29,21 +19,18 @@ describe('api client', () => {
     expect(sp.has('limit')).toBe(false)
   })
 
-  it('upload gửi field theo profile', async () => {
+  it('upload chỉ gửi field file', async () => {
     // FormData của jsdom không đi qua fetch của Node được, nên bắt lời gọi fetch để đọc body.
     const spy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(Response.json({ duplicate: false }, { status: 202 }))
-    await api.upload(new File(['x'], 'a.pdf'), 'legacy')
+    await api.upload(new File(['x'], 'a.pdf'))
     const [url, init] = spy.mock.calls[0]
     const form = init?.body as FormData
     expect(url).toBe('/documents')
     expect(init?.method).toBe('POST')
-    expect({
-      extract_media: form.get('extract_media'),
-      pipeline_version: form.get('pipeline_version'),
-      name: (form.get('file') as File).name,
-    }).toEqual({ extract_media: 'false', pipeline_version: '2', name: 'a.pdf' })
+    expect([...form.keys()]).toEqual(['file'])
+    expect((form.get('file') as File).name).toBe('a.pdf')
     spy.mockRestore()
   })
 

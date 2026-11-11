@@ -217,16 +217,3 @@ async def test_parse_document_appends_formulas_unless_disabled():
     acts.xlsx_formulas = False
     await env.run(acts.parse_document, inp)
     assert "Công thức trong file" not in st.get(keys.md_raw_text_key("x1")).decode()
-
-
-async def test_legacy_mode_skips_charts_formulas_images():
-    from dataclasses import replace
-
-    env = ActivityEnvironment()
-    st, acts, inp = setup(make_xlsx(images=2))
-    inp = replace(inp, extract_media=False)
-    info = await env.run(acts.detect_format, inp)
-    assert info.ocr_page_batches == []
-    await env.run(acts.parse_document, inp)
-    md = st.get(keys.md_raw_text_key("x1")).decode()
-    assert "| Q1 | 10 | 12 |" in md and "Biểu đồ" not in md

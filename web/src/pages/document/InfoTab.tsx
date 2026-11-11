@@ -3,7 +3,6 @@ import type { DocumentDetail } from '../../api/types'
 import { Button } from '../../components/Button'
 import { useToast } from '../../components/Toast'
 import { formatSize, formatTime } from '../../lib/format'
-import { PROFILES, profileOf } from '../../lib/profile'
 
 export function InfoTab({ doc }: { doc: DocumentDetail }) {
   const toast = useToast()
@@ -19,7 +18,6 @@ export function InfoTab({ doc }: { doc: DocumentDetail }) {
     }
   }
 
-  const p = profileOf(doc)
   const rows: [string, React.ReactNode][] = [
     [
       'doc_id',
@@ -31,7 +29,6 @@ export function InfoTab({ doc }: { doc: DocumentDetail }) {
     ['Tên file', doc.file_name],
     ['Loại (mime)', doc.mime],
     ['Kích thước', formatSize(doc.size)],
-    ['Profile', PROFILES.find((x) => x.value === p)?.label ?? p],
     ['index_version', doc.index_version],
     ['Mô hình embedding', doc.embedding_model || '—'],
     ['Số chunk', doc.chunk_count],

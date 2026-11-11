@@ -190,19 +190,6 @@ def test_classify_pages_broken_page():
     assert e.value.code == FILE_CORRUPTED and "Trang 1" in str(e.value)
 
 
-def test_page_markdown_and_fallback(pdf_bytes, monkeypatch):
-    import pymupdf4llm
-
-    doc = pdf.open_pdf(pdf_bytes(["Hello markdown page"]))
-    assert "Hello markdown page" in pdf.page_markdown(doc, 0)
-
-    def boom(*a, **kw):
-        raise RuntimeError("layout lạ")
-
-    monkeypatch.setattr(pymupdf4llm, "to_markdown", boom)
-    assert pdf.page_markdown(doc, 0) == "Hello markdown page"
-
-
 def test_render_png(pdf_bytes):
     doc = pdf.open_pdf(pdf_bytes(["x"]))
     assert pdf.render_page_png(doc, 0, dpi=36).startswith(b"\x89PNG")

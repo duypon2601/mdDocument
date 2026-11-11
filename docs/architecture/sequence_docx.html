@@ -49,13 +49,13 @@ sequenceDiagram
     participant MinIO as Object Storage (MinIO)
     participant WF as Indexing Worker: workflow (ingest-tq)
     participant CW as Conversion Worker (convert-tq)
-    participant OCR as OCR (Tesseract / RapidOCR)
+    participant OCR as OCR (Tesseract)
     participant VLM as Vision LLM (tùy chọn)
 
     Note over WF, CW: Mũi tên giữa hai worker đi qua Temporal Server: workflow xếp activity vào task queue, worker poll queue rồi gửi kết quả lại cho server
     Note over Client, WF: 1. TIẾP NHẬN FILE WORD
     Client->>API: POST /documents (tailieu.docx)
-    API->>API: Kiểm tra MIME thật và dung lượng, doc_id = hash(file, extract_media, pipeline_version)
+    API->>API: Kiểm tra MIME thật và dung lượng, doc_id = SHA-256(file)
     API->>DB: get_or_create document (RECEIVED)
     opt File đã có và không ở trạng thái chạy lại được
         API-->>Client: duplicate = true, không tạo workflow mới
@@ -132,10 +132,6 @@ sequenceDiagram
         </p>
       </div>
     </div>
-
-    <p class="text-xs text-slate-500 text-center">
-      Upload với <code class="bg-white px-1 rounded border">extract_media=false</code> thì chạy bản cũ: chỉ MarkItDown, không đọc ảnh và chart.
-    </p>
 
   </div>
 </body>

@@ -1,8 +1,4 @@
-"""OCR engine: Tesseract (tiếng Việt), RapidOCR hoặc FakeOcr (test).
-
-Model mặc định của RapidOCR là tiếng Trung/Anh, đọc tiếng Việt mất hết dấu mà độ tin cậy
-vẫn báo cao. Tesseract với gói `vie` đọc đúng dấu, nên là engine mặc định khi máy có.
-"""
+"""OCR engine: Tesseract với gói `vie` (đọc đúng dấu tiếng Việt), FakeOcr cho test."""
 
 import shutil
 import subprocess
@@ -27,34 +23,6 @@ class FakeOcr:
     def recognize(self, png: bytes) -> tuple[str, float]:
         self.calls += 1
         return self.text, self.confidence
-
-
-class RapidOcrEngine:
-    """Cài bằng extra `ocr`. Nạp lười để worker không cần OCR vẫn chạy."""
-
-    def __init__(self) -> None:
-        self._engine = None
-
-    def _get(self):
-        if self._engine is None:
-            try:
-                from rapidocr_onnxruntime import RapidOCR
-            except ImportError as e:
-                raise ApplicationError(
-                    "Chưa cài rapidocr-onnxruntime (uv sync --extra ocr)",
-                    type="OCR_UNAVAILABLE",
-                    non_retryable=True,
-                ) from e
-            self._engine = RapidOCR()
-        return self._engine
-
-    def recognize(self, png: bytes) -> tuple[str, float]:
-        result, _ = self._get()(png)
-        if not result:
-            return "", 1.0
-        lines = [r[1] for r in result]
-        conf = sum(float(r[2]) for r in result) / len(result)
-        return "\n".join(lines), conf
 
 
 @lru_cache

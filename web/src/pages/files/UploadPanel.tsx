@@ -34,7 +34,7 @@ export function UploadPanel() {
       const { id, name } = added[i]
       queue.current = queue.current.then(async () => {
         try {
-          const r = await upload.mutateAsync({ file, profile: 'v2' })
+          const r = await upload.mutateAsync(file)
           patch(id, { id, name, state: r.duplicate ? 'duplicate' : 'accepted' })
         } catch (e) {
           const detail = e instanceof ApiError ? e.detail : 'Không gửi được'

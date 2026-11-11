@@ -59,7 +59,7 @@ Session frontend mock API bằng MSW theo đúng dạng dưới đây, nên back
 ### Đã có
 
 ```
-POST /documents                    multipart: file, extract_media, pipeline_version → 202 | 200 (duplicate)
+POST /documents                    multipart: file → 202 | 200 (duplicate)
 POST /documents/batch              multipart: files[] ...                          → {results: [...]}
 GET  /documents?status&q&limit&offset                                              → {items, total, limit, offset}
 GET  /documents/{id}                                                               → Document + progress
@@ -69,7 +69,7 @@ POST /documents/{id}/reindex                                                    
 POST /documents/{id}/cancel                                                        → 202 {doc_id, cancel_requested}
 ```
 
-Document: `doc_id, file_name, mime, size, status, error_code, chunk_count, index_version, embedding_model, created_at, updated_at, extract_media, profile ("legacy"|"v1"|"v2")`. `created_at`/`updated_at` có thể thiếu múi giờ, frontend coi là UTC.
+Document: `doc_id, file_name, mime, size, status, error_code, chunk_count, index_version, embedding_model, created_at, updated_at`. `created_at`/`updated_at` có thể thiếu múi giờ, frontend coi là UTC.
 
 Lỗi: `{"detail": "..."}` hoặc `{"code": "...", "detail": "..."}`.
 

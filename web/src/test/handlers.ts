@@ -27,8 +27,6 @@ export function doc(
     embedding_model: 'bge-m3',
     created_at: '2026-11-09T05:00:00',
     updated_at: '2026-11-09T05:01:00',
-    extract_media: true,
-    profile: 'v2',
     ...extra,
   }
 }

@@ -12,8 +12,6 @@ export const STATUSES = [
 ] as const
 export type Status = (typeof STATUSES)[number]
 
-export type Profile = 'legacy' | 'v1' | 'v2'
-
 export interface Document {
   doc_id: string
   file_name: string
@@ -27,8 +25,6 @@ export interface Document {
   /** Có thể thiếu múi giờ, coi là UTC. */
   created_at: string
   updated_at: string
-  extract_media: boolean
-  profile: Profile
 }
 
 /** GET /documents/{id}: có thêm progress khi tài liệu đang chạy. */

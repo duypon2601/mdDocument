@@ -75,9 +75,9 @@ sequenceDiagram
 
     %% Giai đoạn 1: API
     Note over U, T: GIAI ĐOẠN 1. NHẬN FILE (ingest.api.app)
-    U->>API: POST /documents (file, extract_media, pipeline_version)
+    U->>API: POST /documents (file)
     API->>API: validate_upload: rỗng 400, quá 100 MB 413, MIME không hỗ trợ 415
-    API->>API: compute_doc_id = SHA-256 nội dung (tiền tố legacy- / v1- theo chế độ)
+    API->>API: compute_doc_id = SHA-256 nội dung
     API->>DB: get_or_create(doc_id)
     alt Đã có và không ở FAILED / CANCELLED
         API-->>U: 200, duplicate = true
@@ -107,7 +107,7 @@ sequenceDiagram
     and ocr_pages, mỗi lô một activity (không có lô nào thì bỏ qua)
         WF->>CW: ocr_pages(OcrBatch)
         CW->>S3: GET raw
-        CW->>OCR: Đọc chữ từng trang hoặc ảnh (Tesseract / RapidOCR / Vision LLM)
+        CW->>OCR: Đọc chữ từng trang hoặc ảnh (Tesseract / Vision LLM)
         OCR-->>CW: Text và độ tin cậy
         CW->>S3: PUT md-raw/{doc_id}/ocr/{batch}.md
         CW-->>WF: OcrResult(confidence)

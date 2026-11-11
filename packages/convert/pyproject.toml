@@ -16,7 +16,6 @@ dependencies = [
 
 [project.optional-dependencies]
 docling = ["docling"]
-ocr = ["rapidocr-onnxruntime"]
 
 [project.scripts]
 ingest-convert-worker = "ingest.convert.worker:main"

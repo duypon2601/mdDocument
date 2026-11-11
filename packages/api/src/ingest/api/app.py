@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import (
     FileResponse,
@@ -24,7 +24,7 @@ from httpx import HTTPError
 from pydantic import BaseModel, Field
 from temporalio.exceptions import WorkflowAlreadyStartedError
 
-from ingest.api.dedup import compute_doc_id, is_legacy, profile_of
+from ingest.api.dedup import compute_doc_id
 from ingest.api.queues import QueueInspector
 from ingest.api.search import QdrantSearcher, Searcher, SearchUnavailable
 from ingest.api.validator import ValidationError, safe_name, validate_upload
@@ -52,8 +52,6 @@ def _doc_json(r: DocumentRecord) -> dict:
     d = asdict(r)
     d["created_at"] = r.created_at.isoformat()
     d["updated_at"] = r.updated_at.isoformat()
-    d["extract_media"] = not is_legacy(r.doc_id)
-    d["profile"] = profile_of(r.doc_id)  # legacy | v1 | v2
     return d
 
 
@@ -75,13 +73,9 @@ def create_app(
             status_code=exc.status_code, content={"code": exc.code, "detail": exc.message}
         )
 
-    async def _ingest_one(
-        file_name: str, data: bytes, extract_media: bool = True, pipeline_version: int = 2
-    ) -> dict:
-        if pipeline_version not in (1, 2):
-            raise HTTPException(422, "pipeline_version chỉ nhận 1 hoặc 2")
+    async def _ingest_one(file_name: str, data: bytes) -> dict:
         vf = validate_upload(file_name, data, settings.max_upload_bytes)
-        doc_id = compute_doc_id(data, extract_media, pipeline_version)
+        doc_id = compute_doc_id(data)
         rec, created = repo.get_or_create(doc_id, vf.file_name, vf.mime, vf.size)
         if not created and rec.status not in RESTARTABLE_STATUSES:
             return {"duplicate": True, **_doc_json(rec)}
@@ -103,8 +97,6 @@ def create_app(
                     review_enabled=settings.review_enabled,
                     index_version=1,
                     embedding_model=settings.embed_model,
-                    extract_media=extract_media,
-                    pipeline_version=pipeline_version,
                 )
             )
         except Exception as exc:
@@ -124,24 +116,20 @@ def create_app(
     @app.post("/documents")
     async def upload(
         file: UploadFile = File(...),  # noqa: B008
-        extract_media: bool = Form(True),  # False: bản cũ, không bóc ảnh/chart/công thức
-        pipeline_version: int = Form(2),  # 1: trước chỉnh sửa, 2: sau chỉnh sửa
     ) -> JSONResponse:
         data = await file.read()
-        res = await _ingest_one(safe_name(file.filename), data, extract_media, pipeline_version)
+        res = await _ingest_one(safe_name(file.filename), data)
         return JSONResponse(res, status_code=200 if res["duplicate"] else 202)
 
     @app.post("/documents/batch")
     async def upload_batch(
         files: list[UploadFile] = File(...),  # noqa: B008
-        extract_media: bool = Form(True),
-        pipeline_version: int = Form(2),
     ) -> dict:
         results = []
         for f in files:
             name = safe_name(f.filename)
             try:
-                res = await _ingest_one(name, await f.read(), extract_media, pipeline_version)
+                res = await _ingest_one(name, await f.read())
                 results.append({"file_name": name, "ok": True, **res})
             except ValidationError as e:
                 results.append(

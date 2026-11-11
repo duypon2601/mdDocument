@@ -6,23 +6,21 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from ingest.convert.activities import ConvertActivities
-from ingest.convert.ocr import OcrEngine, RapidOcrEngine, TesseractOcrEngine
+from ingest.convert.ocr import OcrEngine, TesseractOcrEngine
 from ingest.convert.vision import OpenAICompatVision
 from ingest.core.config import Settings, get_settings
 from ingest.core.runtime import make_storage, run_main
 
 
 def make_ocr(s: Settings | None = None) -> OcrEngine:
-    """auto: Tesseract nếu máy có gói ngôn ngữ, không thì RapidOCR (mất dấu tiếng Việt)."""
+    """Tesseract. Máy thiếu tesseract hoặc gói ngôn ngữ thì ảnh chỉ đọc được bằng Vision LLM."""
     s = s or get_settings()
     tess = TesseractOcrEngine(s.ocr_lang)
-    if s.ocr_engine == "tesseract" or (s.ocr_engine == "auto" and tess.available()):
-        return tess
-    if s.ocr_engine == "auto":
+    if not tess.available():
         logging.getLogger(__name__).warning(
-            "Không thấy tesseract với gói %s; dùng RapidOCR, tiếng Việt sẽ mất dấu.", s.ocr_lang
+            "Không thấy tesseract với gói %s; ảnh chỉ đọc được khi có Vision LLM.", s.ocr_lang
         )
-    return RapidOcrEngine()
+    return tess
 
 
 def make_vision(s: Settings) -> OpenAICompatVision | None:

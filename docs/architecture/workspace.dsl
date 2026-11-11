@@ -23,7 +23,7 @@ workspace "Document Ingestion System" "Tài liệu đầu vào → Markdown → 
                 statusCtl = component "Status Controller" "GET /documents, GET /documents/{id}, GET /documents/{id}/markdown, /chunks, /raw, GET /stats, POST /documents/{id}/review, /reindex, /cancel, POST /documents/cancel-running" "FastAPI, ingest.api.app"
                 searchCtl = component "Search Controller" "POST /search: embed câu hỏi rồi tìm top_k chunk trong Qdrant, có thể lọc theo doc_id. Trả 503 khi chưa cấu hình hoặc Qdrant/embedding không tới được" "FastAPI, ingest.api.app, ingest.api.search"
                 validator = component "File Validator" "Kiểm tra MIME thật, dung lượng, định dạng hỗ trợ" "python-magic, ingest.api.validator"
-                dedup = component "Dedup Service" "Tính SHA-256, doc_id sinh từ hash (thêm tiền tố legacy-/v1- theo chế độ) nên file trùng không tạo job mới" "hashlib, ingest.api.dedup"
+                dedup = component "Dedup Service" "Tính SHA-256, doc_id là hash nội dung nên file trùng không tạo job mới" "hashlib, ingest.api.dedup"
                 storageCli = component "Storage Client" "Ghi file gốc vào raw/{doc_id}/, đọc md/{doc_id}.md" "boto3, ingest.core.storage" "Core"
                 docRepo = component "Document Repository" "CRUD document, trạng thái nghiệp vụ, danh sách tài liệu" "SQLAlchemy, ingest.core.db" "Core"
                 wfClient = component "Workflow Client" "start_workflow(id=ingest-{doc_id}), query get_progress, signal review_decision, cancel" "temporalio.client, ingest.api.workflow_client"

@@ -1,5 +1,4 @@
-"""Pipeline v2: phát hiện sai dấu, gọi lại VLM khi 429, thu nhỏ ảnh, log từng lần gọi.
-v1 giữ nguyên hành vi trước chỉnh sửa để so sánh output trên giao diện."""
+"""OCR/VLM: phát hiện sai dấu, gọi lại VLM khi 429, thu nhỏ ảnh, log từng lần gọi."""
 
 import logging
 import random
@@ -7,18 +6,13 @@ import random
 import httpx
 import pymupdf
 import pytest
-from fastapi.testclient import TestClient
 from temporalio.testing import ActivityEnvironment
 
-from ingest.api.app import create_app
-from ingest.api.dedup import compute_doc_id, profile_of
 from ingest.convert.activities import ConvertActivities, vision_reason
 from ingest.convert.ocr import FakeOcr
 from ingest.convert.parsers.vn_syllable import bad_diacritic_ratio, is_valid
 from ingest.convert.vision import FakeVision, shrink_for_vision
 from ingest.core import keys
-from ingest.core.config import Settings
-from ingest.core.db import session_factory
 from ingest.core.models import OcrBatch
 from ingest.core.storage import MemoryStorage
 
@@ -50,12 +44,11 @@ def test_bad_diacritic_ratio_ignores_abbrev_and_plain_words():
     assert bad_diacritic_ratio(BAD)[0] > 0.1
 
 
-def test_vision_reason_v1_vs_v2():
-    assert vision_reason(GOOD, 0.95, 0.6, None, 2) is None
-    assert vision_reason(BAD, 0.95, 0.6, None, 1) is None  # v1 không bắt sai dấu
-    assert vision_reason(BAD, 0.95, 0.6, None, 2).startswith("sai dấu")
+def test_vision_reason():
+    assert vision_reason(GOOD, 0.95, 0.6) is None
+    assert vision_reason(BAD, 0.95, 0.6).startswith("sai dấu")
     table = "Cho vay khách hàng 1.085.310.056 832.975.811 Tiền gửi 42.381.695 30.178.861"
-    assert vision_reason(table, 0.9, 0.6, None, 1).startswith("nhiều số")
+    assert vision_reason(table, 0.9, 0.6).startswith("nhiều số")
     assert vision_reason(GOOD, 0.3, 0.6).startswith("OCR tin cậy thấp")
 
 
@@ -91,79 +84,43 @@ def make_acts(ocr_text: str, vision):
     return st, acts
 
 
-async def run_image(acts, version: int, idx: int = 0):
-    batch = OcrBatch("d", [0], idx, "raw/d/a.png", "image", version)
+async def run_image(acts, idx: int = 0):
+    batch = OcrBatch("d", [0], idx, "raw/d/a.png", "image")
     await ActivityEnvironment().run(acts.ocr_pages, batch)
     return acts.storage.get(keys.md_raw_ocr_key("d", idx)).decode()
 
 
-async def test_v2_retries_429_then_uses_vision(caplog):
+async def test_retries_429_then_uses_vision(caplog):
     vision = Flaky(fails=2)
     st, acts = make_acts("Doanh thu\nT1\nT2\nT3", vision)
     with caplog.at_level(logging.INFO, logger="ingest.convert.activities"):
-        md = await run_image(acts, 2)
+        md = await run_image(acts)
     assert vision.calls == 3 and "| Miền Bắc | 38 |" in md
     assert vision.images[0][:2] == b"\xff\xd8"  # đã thu nhỏ thành JPEG
     logs = caplog.text
     assert logs.count("VLM lỗi") == 2 and "VLM ok" in logs and "ít chữ" in logs
 
 
-async def test_v1_gives_up_on_first_429_and_sends_original_png():
-    vision = Flaky(fails=1)
-    st, acts = make_acts("Doanh thu\nT1\nT2\nT3", vision)
-    md = await run_image(acts, 1)
-    assert vision.calls == 1 and "Miền Bắc" not in md and "T1" in md
-    assert vision.images[0][:4] == b"\x89PNG"
-
-
-async def test_v2_gives_up_after_all_retries_and_keeps_ocr():
+async def test_gives_up_after_all_retries_and_keeps_ocr():
     vision = Flaky(fails=10, code=503)
     st, acts = make_acts("Doanh thu\nT1\nT2\nT3", vision)
-    md = await run_image(acts, 2)
+    md = await run_image(acts)
     assert vision.calls == 4 and "T1" in md
 
 
-async def test_v2_sends_bad_diacritic_page_v1_keeps_ocr(caplog):
+async def test_sends_bad_diacritic_page_to_vision(caplog):
     vision = FakeVision("Đoạn văn đọc lại bằng VLM")
     st, acts = make_acts(BAD, vision)
-    assert "vién" in await run_image(acts, 1, 0) and vision.calls == 0
     with caplog.at_level(logging.INFO, logger="ingest.convert.activities"):
-        assert "đọc lại bằng VLM" in await run_image(acts, 2, 1)
+        assert "đọc lại bằng VLM" in await run_image(acts)
     assert vision.calls == 1 and "sai dấu" in caplog.text
 
 
 async def test_ocr_decision_is_logged(caplog):
     st, acts = make_acts(GOOD, FakeVision())
     with caplog.at_level(logging.INFO, logger="ingest.convert.activities"):
-        await run_image(acts, 2)
-    assert "OCR | d trang 1 | v2" in caplog.text
-
-
-class Wf:
-    def __init__(self):
-        self.ingests = []
-
-    async def start_ingest(self, inp):
-        self.ingests.append(inp)
-
-
-def test_api_three_profiles_have_own_ids():
-    wf = Wf()
-    client = TestClient(create_app(MemoryStorage(), session_factory("sqlite:///:memory:"), wf,
-                                   Settings(max_upload_bytes=10_000)))  # fmt: skip
-    data = b"Ghi chu thu nghiem ba che do xu ly tai lieu."
-    got = {}
-    for prof, form in [("v2", {}), ("v1", {"pipeline_version": "1"}),
-                       ("legacy", {"extract_media": "false"})]:  # fmt: skip
-        r = client.post("/documents", files={"file": ("a.txt", data)}, data=form).json()
-        assert r["profile"] == prof and not r["duplicate"]
-        got[prof] = r["doc_id"]
-    assert got["v2"] == compute_doc_id(data) and got["v1"].startswith("v1-")
-    assert len(set(got.values())) == 3 and all(len(i) == 64 for i in got.values())
-    assert [i.pipeline_version for i in wf.ingests] == [2, 1, 2]
-    assert profile_of(got["legacy"]) == "legacy"
-    bad = client.post("/documents", files={"file": ("a.txt", data)}, data={"pipeline_version": "3"})
-    assert bad.status_code == 422
+        await run_image(acts)
+    assert "OCR | d trang 1 | tin cậy" in caplog.text
 
 
 @pytest.mark.parametrize(

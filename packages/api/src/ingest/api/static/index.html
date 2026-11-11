@@ -31,13 +31,6 @@
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
   .panel h2 { font-size: 15px; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
-  .modes button { text-align: left; padding: 8px 10px; }
-  .modes button small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
-  .modes button.on small { color: #fff; opacity: .85; }
-  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line);
-         color: var(--muted); margin-left: 6px; white-space: nowrap; }
-  .tag.old { border-style: dashed; }
   #drop { border: 2px dashed var(--line); border-radius: 10px; padding: 28px 16px; text-align: center;
           cursor: pointer; color: var(--muted); transition: .15s; margin-bottom: 16px; }
   #drop.over, #drop:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
@@ -85,11 +78,6 @@
   <p class="sub">PDF, Word, PowerPoint, Excel, HTML, ảnh. Tải file lên rồi xem Markdown trích ra.</p>
   <div class="grid">
     <section class="panel">
-      <div class="modes" id="modes" role="radiogroup" aria-label="Chế độ xử lý">
-        <button data-profile="v2" role="radio">Mới v2<small>Sau chỉnh sửa: bắt sai dấu, gọi lại khi lỗi</small></button>
-        <button data-profile="v1" role="radio">Mới v1<small>Trước chỉnh sửa</small></button>
-        <button data-profile="legacy" role="radio">Bản cũ<small>Không bóc ảnh, chart</small></button>
-      </div>
       <div id="drop" tabindex="0">
         <strong>Chọn file</strong> hoặc kéo thả vào đây
         <div class="meta">Chọn được nhiều file cùng lúc</div>
@@ -117,23 +105,6 @@ const LABEL = {
 };
 const $ = (id) => document.getElementById(id);
 let docs = [], selected = null, mdText = null, timer = null;
-const PROFILES = { v2: "mới v2", v1: "mới v1", legacy: "bản cũ" };
-let profile = "v2";
-try { profile = PROFILES[localStorage.getItem("profile")] ? localStorage.getItem("profile") : "v2"; } catch (e) {}
-const profileOf = (d) => d.profile || (d.extract_media === false ? "legacy" : "v2");
-const tag = (d) => {
-  const p = profileOf(d);
-  return `<span class="tag ${p === "legacy" ? "old" : ""}" title="Kiểu xử lý lúc upload">${PROFILES[p]}</span>`;
-};
-
-function showMode() {
-  document.querySelectorAll("#modes button").forEach((b) => {
-    const on = b.dataset.profile === profile;
-    b.classList.toggle("on", on);
-    b.setAttribute("aria-checked", on);
-  });
-}
-
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pillClass = (s) => s === "INDEXED" ? "s-ok" : (s === "FAILED" || s === "CANCELLED") ? "s-bad" : "s-run";
@@ -162,12 +133,9 @@ async function upload(files) {
   for (const f of files) {
     const fd = new FormData();
     fd.append("file", f);
-    fd.append("extract_media", profile === "legacy" ? "false" : "true");
-    fd.append("pipeline_version", profile === "v1" ? "1" : "2");
     try {
       const res = await api("/documents", { method: "POST", body: fd });
-      const m = PROFILES[profile];
-      note(res.duplicate ? `${f.name} (${m}): đã có, dùng lại kết quả` : `${f.name} (${m}): đã nhận, đang xử lý`, true);
+      note(res.duplicate ? `${f.name}: đã có, dùng lại kết quả` : `${f.name}: đã nhận, đang xử lý`, true);
       selected = res.doc_id;
     } catch (e) {
       note(`${f.name}: ${e.message}`, false);
@@ -188,7 +156,7 @@ async function loadList() {
   }
   $("docs").innerHTML = docs.length ? docs.map((d) => `
     <li data-id="${esc(d.doc_id)}" class="${d.doc_id === selected ? "sel" : ""}">
-      <div class="name">${esc(d.file_name)}${tag(d)}<div class="meta">${size(d.size)} · ${when(d.updated_at)}</div></div>
+      <div class="name">${esc(d.file_name)}<div class="meta">${size(d.size)} · ${when(d.updated_at)}</div></div>
       ${pill(d.status)}
     </li>`).join("") : `<li class="empty">Chưa có tài liệu nào</li>`;
   schedule();
@@ -244,14 +212,6 @@ function render(status) {
   }
 }
 
-$("modes").onclick = (e) => {
-  const b = e.target.closest("button[data-profile]");
-  if (!b) return;
-  profile = b.dataset.profile;
-  try { localStorage.setItem("profile", profile); } catch (err) {}
-  showMode();
-};
-showMode();
 $("drop").onclick = () => $("file").click();
 $("drop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") $("file").click(); };
 $("file").onchange = (e) => { upload([...e.target.files]); e.target.value = ""; };

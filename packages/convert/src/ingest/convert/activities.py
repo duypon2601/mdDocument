@@ -39,11 +39,11 @@ logger = logging.getLogger(__name__)
 
 HEARTBEAT_EVERY = 20.0
 
-# v2: OCR có dấu nhưng sai âm tiết (vd. "vién") từ ngưỡng này thì gửi VLM đọc lại.
+# OCR có dấu nhưng sai âm tiết (vd. "vién") từ ngưỡng này thì gửi VLM đọc lại.
 # Đo trên 79 trang BCTC scan: trung vị 0,4%; ngưỡng 1% chọn ra 10 trang lỗi nặng nhất.
 BAD_DIACRITIC_RATIO = 0.01
 MIN_DIACRITIC_WORDS = 30
-VISION_RETRY_DELAYS = (2.0, 5.0, 10.0)  # v2: gọi lại khi 429/503
+VISION_RETRY_DELAYS = (2.0, 5.0, 10.0)  # gọi lại khi 429/503
 
 
 def chunked(items: list[int], n: int) -> list[list[int]]:
@@ -55,25 +55,17 @@ def vision_reason(
     confidence: float,
     min_confidence: float,
     png: bytes | None = None,
-    version: int = 2,
 ) -> str | None:
     """Lý do chuyển ảnh sang Vision LLM; None là giữ kết quả OCR."""
     if confidence < min_confidence:
         return f"OCR tin cậy thấp {confidence:.2f}"
     reason = image_kind.graphic_reason(text, png)
-    if reason or version < 2:
+    if reason:
         return reason
     bad, words = vn_syllable.bad_diacritic_ratio(text)
     if words >= MIN_DIACRITIC_WORDS and bad >= BAD_DIACRITIC_RATIO:
         return f"sai dấu {bad:.1%}"
     return None
-
-
-def needs_vision(
-    text: str, confidence: float, min_confidence: float, png: bytes | None = None
-) -> bool:
-    """Chart, sơ đồ, bảng chụp hoặc OCR kém thì chuyển Vision LLM (luật v1)."""
-    return vision_reason(text, confidence, min_confidence, png, version=1) is not None
 
 
 def _status_code(exc: Exception) -> int | None:
@@ -140,10 +132,9 @@ class ConvertActivities:
             if kind == "pdf":
                 doc = pdf_parser.open_pdf(data)
                 text_pages, ocr_pages = await asyncio.to_thread(pdf_parser.classify_pages, doc)
-                items = list(ocr_pages)
-                if inp.extract_media:  # ảnh trên trang có chữ: số >= page_count
-                    figures = await asyncio.to_thread(pdf_parser.list_figures, doc, text_pages)
-                    items += [doc.page_count + k for k in range(len(figures))]
+                # ảnh trên trang có chữ: số >= page_count
+                figures = await asyncio.to_thread(pdf_parser.list_figures, doc, text_pages)
+                items = list(ocr_pages) + [doc.page_count + k for k in range(len(figures))]
                 return FormatInfo(
                     doc_id=inp.doc_id, kind=kind, mime=mime, page_count=doc.page_count,
                     has_text=bool(text_pages),
@@ -154,13 +145,13 @@ class ConvertActivities:
                     doc_id=inp.doc_id, kind=kind, mime=mime, page_count=1, has_text=False,
                     ocr_page_batches=[[0]],
                 )  # fmt: skip
-            if kind in ("docx", "pptx") and inp.extract_media:
+            if kind in ("docx", "pptx"):
                 slots = await asyncio.to_thread(self._ocr_slots, data, kind)
                 return FormatInfo(
                     doc_id=inp.doc_id, kind=kind, mime=mime, has_text=True,
                     ocr_page_batches=chunked(slots, self.pages_per_batch),
                 )  # fmt: skip
-            if kind == "xlsx" and inp.extract_media:  # ảnh đi OCR; chart đọc ở parse_document
+            if kind == "xlsx":  # ảnh đi OCR; chart đọc ở parse_document
                 images = await asyncio.to_thread(
                     xlsx_media.list_images, data, self.docx_min_image_bytes
                 )
@@ -184,27 +175,23 @@ class ConvertActivities:
                 page_count = doc.page_count
                 text_pages, _ocr = await asyncio.to_thread(pdf_parser.classify_pages, doc)
                 by_page: dict[int, list] = {}
-                if inp.extract_media:
-                    figures = await asyncio.to_thread(pdf_parser.list_figures, doc, text_pages)
-                    for k, (page, rect) in enumerate(figures):
-                        by_page.setdefault(page, []).append((pdf_parser.figure_name(k), rect))
+                figures = await asyncio.to_thread(pdf_parser.list_figures, doc, text_pages)
+                for k, (page, rect) in enumerate(figures):
+                    by_page.setdefault(page, []).append((pdf_parser.figure_name(k), rect))
                 parts = []
                 for i in text_pages:
                     activity.heartbeat({"page": i})
-                    if inp.extract_media:
-                        md = await asyncio.to_thread(
-                            pdf_parser.page_markdown_with_figures, doc, i, by_page.get(i, [])
-                        )
-                    else:  # bản cũ: giữ nguyên output pymupdf4llm
-                        md = await asyncio.to_thread(pdf_parser.page_markdown, doc, i)
+                    md = await asyncio.to_thread(
+                        pdf_parser.page_markdown_with_figures, doc, i, by_page.get(i, [])
+                    )
                     parts.append(f"{page_marker(i + 1)}\n\n{md}")
                 md = "\n\n".join(parts)
             elif kind == "image":
                 md = ""  # ảnh chỉ đi đường OCR
-            elif inp.extract_media and kind in ("docx", "pptx", "xlsx"):
+            elif kind in ("docx", "pptx", "xlsx"):
                 md = await asyncio.to_thread(self._office_markdown, data, inp.file_name, kind)
                 md = await self._add_media_parts(md, data, kind)
-            else:  # html, text, bản cũ: Docling -> MarkItDown -> parser riêng
+            else:  # html, text: Docling -> MarkItDown -> parser riêng
                 md = await asyncio.to_thread(
                     extract_bytes, data, inp.file_name, kind, self.prefer_docling
                 )
@@ -281,7 +268,7 @@ class ConvertActivities:
                     continue
                 png = await asyncio.to_thread(pdf_parser.render_figure_png, doc, *figures[k])
                 where = f"{batch.doc_id[:12]} hình {k + 1} (trang {figures[k][0] + 1})"
-                text, conf = await self._read_image(png, batch.pipeline_version, where)
+                text, conf = await self._read_image(png, where)
                 marker = docx_images.image_marker(pdf_parser.figure_name(k))
                 texts.append(f"{marker}\n\n{text.strip()}")
                 confs.append(conf)
@@ -292,7 +279,7 @@ class ConvertActivities:
                 else data
             )
             where = f"{batch.doc_id[:12]} trang {page + 1}"
-            text, conf = await self._read_image(png, batch.pipeline_version, where)
+            text, conf = await self._read_image(png, where)
             texts.append(f"{page_marker(page + 1)}\n\n{text.strip()}")
             confs.append(conf)
         key = keys.md_raw_ocr_key(batch.doc_id, batch.batch_index)
@@ -318,7 +305,7 @@ class ConvertActivities:
             if png is None:
                 continue
             where = f"{batch.doc_id[:12]} {name}"
-            text, conf = await self._read_image(png, batch.pipeline_version, where)
+            text, conf = await self._read_image(png, where)
             blocks.append(f"{docx_images.image_marker(name)}\n\n{text.strip()}")
             confs.append(conf)
         key = keys.md_raw_ocr_key(batch.doc_id, batch.batch_index)
@@ -344,7 +331,7 @@ class ConvertActivities:
             if png is None:
                 continue
             where = f"{batch.doc_id[:12]} {img.path}"
-            text, conf = await self._read_image(png, batch.pipeline_version, where)
+            text, conf = await self._read_image(png, where)
             confs.append(conf)
             if text.strip():
                 where = img.label()
@@ -355,14 +342,12 @@ class ConvertActivities:
         confidence = sum(confs) / len(confs) if confs else 1.0
         return OcrResult(batch.doc_id, batch.batch_index, key, confidence)
 
-    async def _try_vision(
-        self, png: bytes, version: int = 2, where: str = "", reason: str = ""
-    ) -> str | None:
-        """Gọi Vision LLM, ghi log mỗi lần gọi. v2: thu nhỏ ảnh, gọi lại khi 429/503."""
+    async def _try_vision(self, png: bytes, where: str = "", reason: str = "") -> str | None:
+        """Gọi Vision LLM, ghi log mỗi lần gọi. Thu nhỏ ảnh, gọi lại khi 429/503."""
         if self.vision is None:
             return None
-        image = await asyncio.to_thread(shrink_for_vision, png) if version >= 2 else png
-        delays = self.vision_retry_delays if version >= 2 else ()
+        image = await asyncio.to_thread(shrink_for_vision, png)
+        delays = self.vision_retry_delays
         for attempt in range(len(delays) + 1):
             t0 = time.monotonic()
             try:
@@ -370,8 +355,8 @@ class ConvertActivities:
             except Exception as e:
                 code = _status_code(e)
                 logger.warning(
-                    "VLM lỗi | %s | v%d | %s | %s | lần %d | %.1fs",
-                    where, version, reason, code or type(e).__name__, attempt + 1,
+                    "VLM lỗi | %s | %s | %s | lần %d | %.1fs",
+                    where, reason, code or type(e).__name__, attempt + 1,
                     time.monotonic() - t0,
                 )  # fmt: skip
                 if code in (429, 503) and attempt < len(delays):
@@ -380,8 +365,8 @@ class ConvertActivities:
                 logger.warning("VLM bỏ cuộc, giữ kết quả OCR | %s", where, exc_info=True)
                 return None
             logger.info(
-                "VLM ok | %s | v%d | %s | %d KB | %.1fs | %d ký tự",
-                where, version, reason, len(image) // 1024, time.monotonic() - t0, len(text),
+                "VLM ok | %s | %s | %d KB | %.1fs | %d ký tự",
+                where, reason, len(image) // 1024, time.monotonic() - t0, len(text),
             )  # fmt: skip
             return text
         return None
@@ -392,11 +377,11 @@ class ConvertActivities:
             activity.heartbeat()
             await asyncio.sleep(min(left, HEARTBEAT_EVERY))
 
-    async def _read_image(self, png: bytes, version: int = 2, where: str = "") -> tuple[str, float]:
+    async def _read_image(self, png: bytes, where: str = "") -> tuple[str, float]:
         """Trả (markdown, độ tin cậy). Kết quả Vision LLM tính độ tin cậy 1.0."""
         mode = self.docx_image_mode if self.vision is not None else "ocr"
         if mode == "vision":
-            text = await self._try_vision(png, version, where, "chế độ vision")
+            text = await self._try_vision(png, where, "chế độ vision")
             if text is not None:
                 return text, 1.0
         try:
@@ -404,21 +389,21 @@ class ConvertActivities:
         except ApplicationError as e:
             if e.type != "OCR_UNAVAILABLE" or mode == "ocr":
                 raise
-            v = await self._try_vision(png, version, where, "không có OCR")
+            v = await self._try_vision(png, where, "không có OCR")
             if v is None:
                 raise
             return v, 1.0
         reason = None
         if mode == "auto":
             reason = await asyncio.to_thread(
-                vision_reason, text, conf, self.min_ocr_confidence, png, version
+                vision_reason, text, conf, self.min_ocr_confidence, png
             )
         if reason:
-            v = await self._try_vision(png, version, where, reason)
+            v = await self._try_vision(png, where, reason)
             if v:  # Vision trả rỗng (ảnh trang trí) thì giữ chữ OCR đọc được
                 return v, 1.0
         else:
-            logger.info("OCR | %s | v%d | tin cậy %.2f | %d ký tự", where, version, conf, len(text))
+            logger.info("OCR | %s | tin cậy %.2f | %d ký tự", where, conf, len(text))
         return text, conf
 
     @activity.defn(name="finalize_markdown")

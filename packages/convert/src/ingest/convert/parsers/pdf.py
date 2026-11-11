@@ -34,16 +34,6 @@ def classify_pages(doc: pymupdf.Document) -> tuple[list[int], list[int]]:
     return text_pages, ocr_pages
 
 
-def page_markdown(doc: pymupdf.Document, index: int) -> str:
-    import pymupdf4llm
-
-    try:
-        return pymupdf4llm.to_markdown(doc, pages=[index], show_progress=False).strip()
-    except Exception:
-        # pymupdf4llm lỗi ở layout lạ: lùi về text thường của trang
-        return doc[index].get_text("text").strip()
-
-
 def render_page_png(doc: pymupdf.Document, index: int, dpi: int = 200) -> bytes:
     return doc[index].get_pixmap(dpi=dpi).tobytes("png")
 
@@ -52,7 +42,7 @@ def render_page_png(doc: pymupdf.Document, index: int, dpi: int = 200) -> bytes:
 #
 # Trang vừa có chữ vừa có ảnh (chart, sơ đồ, bảng chụp) không đi OCR cả trang, nên ảnh
 # bị bỏ qua; còn pymupdf4llm thì tự OCR ảnh và để lại khối "picture text" toàn chữ vụn.
-# Ở đây mỗi ảnh đủ lớn là một "hình", đọc riêng bằng RapidOCR/Vision LLM như ảnh docx,
+# Ở đây mỗi ảnh đủ lớn là một "hình", đọc riêng bằng OCR/Vision LLM như ảnh docx,
 # và nội dung được chèn vào đúng chỗ ảnh trong trang.
 #
 # Trong ocr_page_batches, số < page_count là trang OCR cả trang, số >= page_count là

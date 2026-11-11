@@ -9,7 +9,7 @@ import pytest
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from ingest.convert.activities import ConvertActivities, needs_vision
+from ingest.convert.activities import ConvertActivities, vision_reason
 from ingest.convert.ocr import FakeOcr
 from ingest.convert.parsers import docx_images
 from ingest.convert.vision import FakeVision, OpenAICompatVision
@@ -188,8 +188,8 @@ def test_placeholder_count_mismatch_appends_at_end():
         ("1234567890 " * 30 + LONG_TEXT[:100], 0.95, True),
     ],
 )
-def test_needs_vision(text, conf, expected):
-    assert needs_vision(text, conf, 0.6) is expected
+def test_vision_reason(text, conf, expected):
+    assert (vision_reason(text, conf, 0.6) is not None) is expected
 
 
 def test_openai_compat_vision_request_and_fence_strip():

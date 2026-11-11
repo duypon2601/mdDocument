@@ -44,8 +44,6 @@ class Settings(BaseSettings):
 
     # OCR
     ocr_pages_per_batch: int = 10
-    # auto: Tesseract (đọc đúng dấu tiếng Việt) nếu có, không thì RapidOCR
-    ocr_engine: Literal["auto", "tesseract", "rapidocr"] = "auto"
     ocr_lang: str = "vie+eng"
     min_ocr_confidence: float = 0.6
     review_enabled: bool = False

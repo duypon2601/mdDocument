@@ -6,7 +6,6 @@ import type {
   DocumentDetail,
   DocumentList,
   ListParams,
-  Profile,
   QueueSnapshot,
   ReindexResult,
   SearchRequest,
@@ -70,14 +69,6 @@ function query(params: Record<string, string | number | undefined | null>): stri
   return s ? `?${s}` : ''
 }
 
-/** Profile thành field form: bản cũ không bóc media, v1 = trước chỉnh sửa, v2 = sau chỉnh sửa. */
-export function profileFields(profile: Profile): {
-  extract_media: boolean
-  pipeline_version: 1 | 2
-} {
-  return { extract_media: profile !== 'legacy', pipeline_version: profile === 'v1' ? 1 : 2 }
-}
-
 const enc = encodeURIComponent
 
 export const api = {
@@ -111,12 +102,9 @@ export const api = {
     return json('/temporal/queues')
   },
 
-  upload(file: File, profile: Profile): Promise<UploadResult> {
-    const { extract_media, pipeline_version } = profileFields(profile)
+  upload(file: File): Promise<UploadResult> {
     const form = new FormData()
     form.append('file', file)
-    form.append('extract_media', String(extract_media))
-    form.append('pipeline_version', String(pipeline_version))
     return json('/documents', { method: 'POST', body: form })
   },
 

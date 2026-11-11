@@ -3,7 +3,6 @@ import type { Document } from '../../api/types'
 import { Button } from '../../components/Button'
 import { StatusPill } from '../../components/StatusPill'
 import { formatSize, formatTime } from '../../lib/format'
-import { PROFILE_LABEL, profileOf } from '../../lib/profile'
 import { isRunning } from '../../lib/status'
 
 interface Props {
@@ -34,7 +33,6 @@ export function DocumentTable({ items, onStop, busyId }: Props) {
       </thead>
       <tbody className="max-md:block">
         {items.map((d) => {
-          const p = profileOf(d)
           return (
             <tr
               key={d.doc_id}
@@ -49,12 +47,6 @@ export function DocumentTable({ items, onStop, busyId }: Props) {
                 >
                   {d.file_name}
                 </Link>
-                <span
-                  title="Kiểu xử lý lúc upload"
-                  className={`ml-2 rounded px-1.5 py-0.5 text-xs ${p === 'legacy' ? 'bg-warn-bg text-warn-fg' : 'bg-surface-2 text-muted'}`}
-                >
-                  {PROFILE_LABEL[p]}
-                </span>
               </td>
               <td className={cell}>
                 <span className={label}>Kích thước</span>

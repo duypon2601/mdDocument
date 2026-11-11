@@ -310,21 +310,6 @@ def test_markdown_endpoint(env):
     assert client.get("/documents/khong-co/markdown").status_code == 404
 
 
-def test_legacy_mode_gets_own_doc_id_and_flag(env):
-    client, _, _, wf = env
-    data = make_pdf(["so sánh hai chế độ"])
-    new = up(client, data=data).json()
-    old = client.post(
-        "/documents", files={"file": ("a.pdf", data)}, data={"extract_media": "false"}
-    ).json()
-    assert new["doc_id"] == compute_doc_id(data) and new["extract_media"] is True
-    assert old["doc_id"].startswith("legacy-") and len(old["doc_id"]) == 64
-    assert old["extract_media"] is False and not old["duplicate"]
-    assert [i.extract_media for i in wf.ingests] == [True, False]
-    items = {d["doc_id"]: d["extract_media"] for d in client.get("/documents").json()["items"]}
-    assert items == {new["doc_id"]: True, old["doc_id"]: False}
-
-
 def test_list_multiple_statuses(env):
     client, _, repo, _ = env
     ids = [up(client, f"{i}.pdf", make_pdf([f"s{i}"])).json()["doc_id"] for i in range(3)]

@@ -101,7 +101,7 @@ flowchart LR
           </tbody>
         </table>
       </div>
-      <p class="text-sm text-slate-600 mt-4">Workflow (chạy trong Indexing Worker, <code>workflows/ingestion.py:159</code>) gói mỗi lô thành một <code>OcrBatch</code> (<code>models.py:50</code>) gồm <code>doc_id</code>, <code>pages</code> (lô số), <code>batch_index</code>, <code>raw_key</code>, <code>kind</code>, <code>pipeline_version</code>. Activity <code>ocr_pages</code> tự tải file gốc từ <code>raw_key</code> và tính lại danh sách trang, hình hay slot để biết mỗi số ứng với ảnh nào. Danh sách chỉ phụ thuộc nội dung file nên lần nào tính cũng ra cùng thứ tự, và dữ liệu đi qua Temporal chỉ là vài con số.</p>
+      <p class="text-sm text-slate-600 mt-4">Workflow (chạy trong Indexing Worker, <code>workflows/ingestion.py:159</code>) gói mỗi lô thành một <code>OcrBatch</code> (<code>models.py:50</code>) gồm <code>doc_id</code>, <code>pages</code> (lô số), <code>batch_index</code>, <code>raw_key</code>, <code>kind</code>. Activity <code>ocr_pages</code> tự tải file gốc từ <code>raw_key</code> và tính lại danh sách trang, hình hay slot để biết mỗi số ứng với ảnh nào. Danh sách chỉ phụ thuộc nội dung file nên lần nào tính cũng ra cùng thứ tự, và dữ liệu đi qua Temporal chỉ là vài con số.</p>
     </section>
 
     <!-- 2. Marker -->

@@ -9,12 +9,10 @@ from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
 from ingest.convert.activities import ConvertActivities
-from ingest.convert.ocr import FakeOcr, RapidOcrEngine, TesseractOcrEngine, parse_tsv
+from ingest.convert.ocr import FakeOcr, TesseractOcrEngine, parse_tsv
 from ingest.convert.parsers import image_kind
 from ingest.convert.vision import FakeVision
-from ingest.convert.worker import make_ocr
 from ingest.core import keys
-from ingest.core.config import Settings
 from ingest.core.models import OcrBatch
 from ingest.core.storage import MemoryStorage
 
@@ -90,13 +88,6 @@ def test_tesseract_unavailable_raises_non_retryable():
     with pytest.raises(ApplicationError) as ei:
         eng.recognize(WHITE)
     assert ei.value.type == "OCR_UNAVAILABLE" and ei.value.non_retryable
-
-
-def test_make_ocr_choice():
-    assert isinstance(make_ocr(Settings(ocr_engine="rapidocr")), RapidOcrEngine)
-    assert isinstance(make_ocr(Settings(ocr_engine="tesseract")), TesseractOcrEngine)
-    fallback = make_ocr(Settings(ocr_engine="auto", ocr_lang="khong_co_ngon_ngu_nay"))
-    assert isinstance(fallback, RapidOcrEngine)
 
 
 @pytest.mark.skipif(

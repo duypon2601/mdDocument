@@ -71,7 +71,7 @@ sequenceDiagram
     participant WF as Indexing Worker: workflow (ingest-tq)
     participant MinIO as Object Storage (MinIO)
     participant CW as Conversion Worker (convert-tq)
-    participant OCR as OCR (Tesseract / RapidOCR)
+    participant OCR as OCR (Tesseract)
     participant VLM as Vision LLM (tùy chọn)
 
     Note over WF, CW: Mũi tên giữa hai worker đi qua Temporal Server. update_status là activity trên ingest-tq, chạy ngay trong Indexing Worker
@@ -164,7 +164,7 @@ sequenceDiagram
           </li>
           <li class="flex items-start gap-2">
             <span class="text-slate-400">•</span>
-            <span><strong class="text-slate-800">ocr_pages:</strong> Mỗi lô 10 trang là một activity. Mặc định dùng Tesseract (đọc đúng dấu tiếng Việt), máy không có Tesseract thì dùng RapidOCR. Mỗi trang gửi một <strong>Heartbeat</strong> về Temporal để không bị timeout.</span>
+            <span><strong class="text-slate-800">ocr_pages:</strong> Mỗi lô 10 trang là một activity. OCR bằng Tesseract (đọc đúng dấu tiếng Việt). Mỗi trang gửi một <strong>Heartbeat</strong> về Temporal để không bị timeout.</span>
           </li>
         </ul>
       </div>

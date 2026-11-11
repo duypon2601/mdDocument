@@ -5,7 +5,7 @@
   vùng ô mà công thức `c:f` trỏ tới bằng openpyxl.
 - Ảnh (`xl/media/*`) được liệt kê theo thứ tự sheet và vị trí neo, để activity
   `ocr_pages` lấy ảnh thứ i giống hệt lúc `detect_format` đếm. Ảnh đi chung đường
-  RapidOCR/Vision LLM với ảnh trong docx (`ConvertActivities._read_image`).
+  OCR/Vision LLM với ảnh trong docx (`ConvertActivities._read_image`).
 
 Đi theo quan hệ: workbook -> sheet -> drawing -> (ảnh | chart). Ảnh không gắn với
 drawing nào vẫn được lấy, sheet để trống.

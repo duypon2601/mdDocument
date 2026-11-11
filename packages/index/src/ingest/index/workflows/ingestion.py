@@ -157,7 +157,7 @@ class DocumentIngestionWorkflow:
         )
 
         ocr_batches = [
-            OcrBatch(inp.doc_id, pages, i, inp.raw_key, fmt.kind, inp.pipeline_version)
+            OcrBatch(inp.doc_id, pages, i, inp.raw_key, fmt.kind)
             for i, pages in enumerate(fmt.ocr_page_batches)
         ]
         parse_coro = workflow.execute_activity(

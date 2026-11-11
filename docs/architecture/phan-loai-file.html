@@ -133,7 +133,7 @@ flowchart TD
     <!-- 3 -->
     <section id="c3" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
       <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold text-slate-900">3. Chọn parser theo loại file</h2><span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-100 text-amber-800 border-amber-200">Conversion Worker · detect_format, parse_document</span></div>
-      <p class="text-sm text-slate-500 mt-1 mb-4"><code>convert/activities.py</code>. <code>detect_format</code> chia việc thành phần text (activity <code>parse_document</code>) và các lô ảnh cần đọc (<code>ocr_page_batches</code> → <code>ocr_pages</code>). Upload qua giao diện luôn chạy v2, có <code>extract_media</code>. Cuối cùng <code>finalize_markdown</code> ghép tất cả thành <code>md/{doc_id}.md</code>.</p>
+      <p class="text-sm text-slate-500 mt-1 mb-4"><code>convert/activities.py</code>. <code>detect_format</code> chia việc thành phần text (activity <code>parse_document</code>) và các lô ảnh cần đọc (<code>ocr_page_batches</code> → <code>ocr_pages</code>). Cuối cùng <code>finalize_markdown</code> ghép tất cả thành <code>md/{doc_id}.md</code>.</p>
       <div class="mermaid flex justify-center overflow-x-auto">
 flowchart LR
     K{kind} --> PDF[pdf]
@@ -189,7 +189,7 @@ flowchart TD
     M -- vision --> V1[Gọi Vision LLM]:::vlm
     V1 -- "có kết quả" --> OUTV([Markdown từ VLM, tin cậy 1.0]):::ok
     V1 -- "lỗi" --> OCR
-    M -- "auto / ocr" --> OCR["OCR: Tesseract vie+eng<br/>(không có thì RapidOCR)"]
+    M -- "auto / ocr" --> OCR["OCR: Tesseract vie+eng"]
     OCR -- "OCR_UNAVAILABLE, chế độ ≠ ocr" --> V2[Gọi Vision LLM]:::vlm
     V2 --> OUTV
     OCR -- "chế độ ocr" --> OUTO([Giữ chữ OCR]):::ok

@@ -49,7 +49,7 @@ afterEach(() => {
 })
 
 describe('danh sách', () => {
-  it('hiện bảng, tổng số và tag profile', async () => {
+  it('hiện bảng và tổng số', async () => {
     at()
     expect(await screen.findByText('bao-cao-tai-chinh.xlsx')).toBeInTheDocument()
     expect(screen.getByText(/4 tài liệu · Trang 1\/1/)).toBeInTheDocument()
@@ -168,14 +168,13 @@ describe('upload', () => {
   const pdf = () => new File(['x'], 'moi.pdf', { type: 'application/pdf' })
   const created = { ...doc('e'.repeat(64), 'moi.pdf', 'RECEIVED') }
 
-  it('thành công: luôn xử lý theo v2 và hiện "Đã nhận"', async () => {
+  it('thành công: hiện "Đã nhận"', async () => {
     const { forms } = mockFetchUpload([Response.json({ duplicate: false, ...created }, { status: 202 })])
     at()
     await userEvent.upload(screen.getByLabelText('Chọn file để tải lên'), pdf())
     expect(await screen.findByText('Đã nhận')).toBeInTheDocument()
     expect(forms).toHaveLength(1)
-    expect(forms[0].get('extract_media')).toBe('true')
-    expect(forms[0].get('pipeline_version')).toBe('2')
+    expect([...forms[0].keys()]).toEqual(['file'])
   })
 
   it('không còn ô chọn kiểu xử lý', () => {

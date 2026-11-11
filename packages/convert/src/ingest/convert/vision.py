@@ -114,7 +114,7 @@ class OpenAICompatVision:
                 ],
             },
         )
-        # 429 và 5xx: raise, phía gọi quay về kết quả RapidOCR
+        # 429 và 5xx: raise, phía gọi quay về kết quả OCR
         resp.raise_for_status()
         text = (resp.json()["choices"][0]["message"].get("content") or "").strip()
         m = _FENCE.match(text)

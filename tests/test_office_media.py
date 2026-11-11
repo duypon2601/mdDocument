@@ -3,7 +3,6 @@
 import io
 import random
 import zipfile
-from dataclasses import replace
 
 import pymupdf
 from openpyxl import Workbook
@@ -77,12 +76,6 @@ async def test_pdf_chart_on_text_page_goes_to_vision_and_lands_in_place():
     assert vision.calls == 1
     assert "picture text" not in md and "<!--" not in md.replace("<!-- page: 1 -->", "")
     assert md.index("Mo dau") < md.index("| T1 | 1250 |") < md.index("Ket luan")
-
-
-async def test_pdf_legacy_keeps_old_path():
-    st, acts, inp = setup(make_mixed_pdf(), "a.pdf")
-    info = await ActivityEnvironment().run(acts.detect_format, replace(inp, extract_media=False))
-    assert info.ocr_page_batches == []
 
 
 # ---------- xlsx: bảng sạch ----------

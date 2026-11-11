@@ -12,7 +12,6 @@ import { StatusPill } from '../../components/StatusPill'
 import { useToast } from '../../components/Toast'
 import { errText, useDocActions } from '../../hooks/useDocActions'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
-import { PROFILE_LABEL, profileOf } from '../../lib/profile'
 import { isRunning } from '../../lib/status'
 import { ChunksTab } from './ChunksTab'
 import { InfoTab } from './InfoTab'
@@ -59,7 +58,6 @@ function Detail({ doc }: { doc: DocumentDetail }) {
   const tab: TabKey = TABS.find((t) => t.key === sp.get('tab'))?.key ?? 'markdown'
   const [confirm, setConfirm] = useState<'stop' | 'reject' | null>(null)
   const busy = actions.busyId === doc.doc_id
-  const p = profileOf(doc)
 
   async function downloadMarkdown() {
     try {
@@ -91,9 +89,6 @@ function Detail({ doc }: { doc: DocumentDetail }) {
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="text-2xl font-semibold break-all">{doc.file_name}</h1>
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
-          {PROFILE_LABEL[p]}
-        </span>
         <StatusPill status={doc.status} />
       </div>
 

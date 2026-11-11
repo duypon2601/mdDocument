@@ -1,4 +1,4 @@
-"""Chạy các file mẫu trong samples/ qua ConvertActivities (RapidOCR thật, không Vision).
+"""Chạy các file mẫu trong samples/ qua ConvertActivities (Tesseract thật, không Vision).
 
 uv run python samples/scripts/run_convert.py [tên-file ...]
 """
@@ -11,15 +11,15 @@ from pathlib import Path
 
 from temporalio.testing import ActivityEnvironment
 
-from ingest import keys
-from ingest.activities.convert import ConvertActivities
-from ingest.models import FinalizeInput, IngestInput, OcrBatch
-from ingest.ocr import RapidOcrEngine
-from ingest.storage import MemoryStorage
+from ingest.convert.activities import ConvertActivities
+from ingest.convert.ocr import TesseractOcrEngine
+from ingest.core import keys
+from ingest.core.models import FinalizeInput, IngestInput, OcrBatch
+from ingest.core.storage import MemoryStorage
 
 SAMPLES = Path(__file__).resolve().parents[1]
 OUT = SAMPLES / "out"
-OCR = RapidOcrEngine()  # dùng chung để chỉ nạp model một lần
+OCR = TesseractOcrEngine()
 
 
 async def convert(path: Path) -> str:
@@ -46,8 +46,10 @@ async def convert(path: Path) -> str:
 
 async def main(names: list[str]) -> int:
     OUT.mkdir(exist_ok=True)
-    files = [SAMPLES / n for n in names] if names else sorted(
-        p for p in SAMPLES.iterdir() if p.suffix in {".docx", ".pdf", ".xlsx"}
+    files = (
+        [SAMPLES / n for n in names]
+        if names
+        else sorted(p for p in SAMPLES.iterdir() if p.suffix in {".docx", ".pdf", ".xlsx"})
     )
     failed = 0
     for path in files:

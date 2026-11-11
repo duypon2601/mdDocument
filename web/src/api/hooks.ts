@@ -12,7 +12,6 @@ import type {
   DocumentDetail,
   DocumentList,
   ListParams,
-  Profile,
   SearchRequest,
   Stats,
 } from './types'
@@ -120,8 +119,7 @@ function refresh(qc: QueryClient) {
 export function useUpload() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ file, profile }: { file: File; profile: Profile }) =>
-      api.upload(file, profile),
+    mutationFn: (file: File) => api.upload(file),
     onSettled: () => refresh(qc),
   })
 }
